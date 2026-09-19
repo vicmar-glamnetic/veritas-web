@@ -25,20 +25,17 @@ export default async function PromosPage() {
 
       <Container className="py-10">
         {promos.length === 0 ? (
-          <div className="rounded-xl border border-line bg-surface-sunken px-5 py-10 text-center">
-            <p className="font-semibold text-ink-900">Nothing running just now.</p>
-            <p className="mx-auto mt-2 max-w-md text-sm text-ink-500">
+          <div className="border-l-2 border-line-strong py-2 pl-5">
+            <p className="font-serif text-lg text-ink-900">Nothing running just now.</p>
+            <p className="mt-2 max-w-md text-sm text-ink-500">
               New offers go up on our Facebook page first, so follow us there and you
               will hear about the next one.
             </p>
           </div>
         ) : (
-          <ul className="grid gap-5 sm:grid-cols-2">
+          <ul className="divide-y divide-line border-t border-line-strong">
             {promos.map((promo) => (
-              <li
-                key={promo.id}
-                className="overflow-hidden rounded-xl border border-accent-200 bg-accent-50"
-              >
+              <li key={promo.id} className="py-8 first:pt-7">
                 {promo.imageUrl ? (
                   /* Staff-uploaded promo images are arbitrary URLs of unknown size.
                      next/image would need every possible host allow-listed in
@@ -48,15 +45,15 @@ export default async function PromosPage() {
                     src={promo.imageUrl}
                     alt=""
                     loading="lazy"
-                    className="h-44 w-full bg-surface-sunken object-cover"
+                    className="mb-5 h-48 w-full rounded bg-surface-sunken object-cover"
                   />
                 ) : null}
-                <div className="p-5">
-                  <h2 className="text-lg font-bold text-accent-800">{promo.title}</h2>
-                  <p className="mt-2 text-sm leading-relaxed whitespace-pre-line text-ink-700">
+                <div className="max-w-2xl">
+                  <h2 className="font-serif text-2xl text-accent-800">{promo.title}</h2>
+                  <p className="mt-3 leading-relaxed whitespace-pre-line text-ink-700">
                     {promo.body}
                   </p>
-                  <p className="mt-4 text-xs font-semibold text-ink-500">
+                  <p className="mt-4 text-xs font-semibold tracking-[0.12em] text-ink-400 uppercase">
                     Runs until {formatManilaDate(manilaToUtc(promo.endsOn, '12:00'))}
                   </p>
                 </div>

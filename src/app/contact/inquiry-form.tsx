@@ -9,7 +9,7 @@ import { submitInquiry, type InquiryState } from './actions';
 const INITIAL: InquiryState = { status: 'idle' };
 
 const fieldClasses =
-  'mt-1.5 block w-full rounded-lg border bg-surface px-3.5 py-3 text-base text-ink-900 placeholder:text-ink-400';
+  'mt-1.5 block w-full rounded border bg-surface px-3.5 py-3 text-base text-ink-900 placeholder:text-ink-400';
 
 function SubmitButton() {
   const { pending } = useFormStatus();
@@ -17,7 +17,7 @@ function SubmitButton() {
     <button
       type="submit"
       disabled={pending}
-      className="inline-flex min-h-[3rem] w-full items-center justify-center rounded-xl bg-brand-700 px-5 py-3 text-base font-semibold text-white hover:bg-brand-800 disabled:opacity-60 sm:w-auto"
+      className="inline-flex min-h-[3rem] w-full items-center justify-center rounded bg-brand-700 px-5 py-3 text-base font-semibold text-white hover:bg-brand-800 disabled:opacity-60 sm:w-auto"
     >
       {pending ? 'Sending…' : 'Send message'}
     </button>
@@ -66,9 +66,9 @@ export function InquiryForm() {
     return (
       <div
         role="status"
-        className="rounded-xl border border-brand-200 bg-brand-50 px-5 py-6 text-brand-900"
+        className="rounded border border-brand-200 bg-brand-50 px-5 py-6 text-brand-900"
       >
-        <p className="text-lg font-bold">That has reached us</p>
+        <p className="font-serif text-xl">That has reached us</p>
         <p className="mt-2 text-sm leading-relaxed">{state.message}</p>
         <p className="mt-4 text-sm leading-relaxed">
           If it turns out to be urgent, please ring the clinic instead of waiting on our
@@ -83,7 +83,7 @@ export function InquiryForm() {
       {state.status === 'error' && state.message ? (
         <div
           role="alert"
-          className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-800"
+          className="rounded border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-800"
         >
           {state.message}
         </div>
@@ -99,7 +99,7 @@ export function InquiryForm() {
           autoComplete="name"
           aria-invalid={errors.name ? true : undefined}
           aria-describedby={errors.name ? 'name-error' : undefined}
-          className={`${fieldClasses} ${errors.name ? 'border-red-400' : 'border-line'}`}
+          className={`${fieldClasses} ${errors.name ? 'border-red-400' : 'border-line-strong'}`}
         />
       </Field>
 
@@ -114,7 +114,7 @@ export function InquiryForm() {
           inputMode="email"
           aria-invalid={errors.email ? true : undefined}
           aria-describedby={errors.email ? 'email-error' : 'email-hint'}
-          className={`${fieldClasses} ${errors.email ? 'border-red-400' : 'border-line'}`}
+          className={`${fieldClasses} ${errors.email ? 'border-red-400' : 'border-line-strong'}`}
         />
       </Field>
 
@@ -133,7 +133,7 @@ export function InquiryForm() {
           inputMode="tel"
           placeholder="0917 123 4567"
           aria-describedby="mobile-hint"
-          className={`${fieldClasses} ${errors.mobile ? 'border-red-400' : 'border-line'}`}
+          className={`${fieldClasses} ${errors.mobile ? 'border-red-400' : 'border-line-strong'}`}
         />
       </Field>
 
@@ -146,7 +146,7 @@ export function InquiryForm() {
           defaultValue={prior?.message ?? ''}
           aria-invalid={errors.message ? true : undefined}
           aria-describedby={errors.message ? 'message-error' : undefined}
-          className={`${fieldClasses} ${errors.message ? 'border-red-400' : 'border-line'}`}
+          className={`${fieldClasses} ${errors.message ? 'border-red-400' : 'border-line-strong'}`}
         />
       </Field>
 
@@ -159,7 +159,7 @@ export function InquiryForm() {
       <p className="text-sm leading-relaxed text-ink-500">
         We use what you write here only to answer you, and nothing else. Please keep
         medical details and test results out of it. More in our{' '}
-        <Link href="/privacy" className="font-medium text-brand-700 underline underline-offset-2">
+        <Link href="/privacy" className="font-medium text-brand-700 underline underline-offset-4">
           privacy notice
         </Link>
         .

@@ -1,10 +1,9 @@
 import Link from 'next/link';
 
-import { ButtonLink, Callout, Card, Container } from '@/components/ui';
+import { ButtonLink, Container, SectionHeading } from '@/components/ui';
 import { telHref } from '@/lib/mobile';
 import { getActiveDoctors, getActivePromos, getSiteSettings } from '@/lib/queries';
 
-// Clinic content changes rarely; serve it prerendered and refresh in the background.
 export const revalidate = 300;
 
 const WHAT_WE_DO = [
@@ -22,13 +21,18 @@ const WHAT_WE_DO = [
   },
 ] as const;
 
-/** Things patients ring up to ask, answered before they have to. */
 const BEFORE_YOU_COME = [
-  'Bring a valid ID.',
-  'Senior citizens and persons with disability get the 20% discount the law provides. Bring your booklet or ID.',
-  'If you have PhilHealth or an HMO, bring the card and ask at the desk before your test.',
-  'Some tests need you to skip breakfast. If yours does, it will say so on your confirmation.',
-];
+  ['Bring a valid ID.', 'Any government ID is fine.'],
+  [
+    'Senior citizen or PWD?',
+    'Bring your booklet or ID and you get the 20% discount the law provides.',
+  ],
+  ['PhilHealth or an HMO?', 'Bring the card and ask at the desk before your test.'],
+  [
+    'Some tests need an empty stomach.',
+    'If yours does, it will say so on your confirmation. Water is fine.',
+  ],
+] as const;
 
 export default async function HomePage() {
   const [settings, doctors, promos] = await Promise.all([
@@ -39,179 +43,186 @@ export default async function HomePage() {
 
   return (
     <>
-      {/* Hero */}
-      <section className="border-b border-line bg-brand-50">
-        <Container className="py-10 sm:py-14">
-          <h1 className="max-w-2xl text-3xl leading-tight font-bold tracking-tight text-ink-900 sm:text-4xl">
-            Book your slot, then come at that time.
-          </h1>
-          <p className="mt-4 max-w-xl text-lg leading-relaxed text-ink-700">
-            Consultations, blood tests, X-ray, ultrasound, ECG and 2D echo, all in the
-            same building. Booking takes about a minute and costs nothing. You pay here,
-            on the day.
-          </p>
+      {/* Hero. No box, no gradient; a big serif line on paper. */}
+      <section className="border-b border-line bg-surface">
+        <Container className="py-12 sm:py-20">
+          <div className="max-w-2xl">
+            <p className="text-xs font-semibold tracking-[0.18em] text-brand-600 uppercase">
+              Consultations · Laboratory · X-ray · Ultrasound
+            </p>
+            <h1 className="mt-5 text-[2.1rem] leading-[1.15] text-ink-900 sm:text-5xl">
+              Book your slot, then come at that time.
+            </h1>
+            <p className="mt-5 text-lg leading-relaxed text-ink-700">
+              A clinic, a laboratory and an X-ray room in the same building. Booking takes
+              about a minute and costs nothing. You pay here, on the day.
+            </p>
 
-          <div className="mt-7 flex flex-col gap-3 sm:flex-row">
-            <ButtonLink href="/book" className="sm:min-w-56">
-              Book an appointment
-            </ButtonLink>
-            {settings.phonePrimary ? (
-              <ButtonLink href={telHref(settings.phonePrimary)} variant="secondary">
-                Call {settings.phonePrimary}
+            <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+              <ButtonLink href="/book" className="sm:min-w-52">
+                Book an appointment
               </ButtonLink>
-            ) : null}
+              {settings.phonePrimary ? (
+                <ButtonLink href={telHref(settings.phonePrimary)} variant="secondary">
+                  Call {settings.phonePrimary}
+                </ButtonLink>
+              ) : null}
+            </div>
           </div>
 
-          <p className="mt-6 max-w-xl text-sm leading-relaxed text-ink-700">
-            Walk-ins are still welcome. We hold back slots in every session for people who
-            just turn up, so booking online never takes a place away from someone at the
+          <p className="mt-10 max-w-xl border-l-2 border-brand-200 pl-4 text-sm leading-relaxed text-ink-500">
+            Walk-ins are still welcome. We hold back places in every session for people who
+            just turn up, so booking online never takes a slot away from someone at the
             door.
           </p>
         </Container>
       </section>
 
-      {/* Practical details */}
-      <Container className="py-10">
-        <div className="grid gap-4 sm:grid-cols-3">
-          <Card>
-            <h2 className="text-sm font-bold tracking-wide text-ink-900 uppercase">
+      {/* Practical strip: three plain columns, divided by rules, not cards. */}
+      <Container className="py-12">
+        <dl className="grid gap-8 sm:grid-cols-3 sm:gap-10">
+          <div>
+            <dt className="text-xs font-semibold tracking-[0.14em] text-ink-400 uppercase">
               When we are open
-            </h2>
-            <p className="mt-2 text-sm leading-relaxed whitespace-pre-line text-ink-500">
+            </dt>
+            <dd className="mt-3 text-sm leading-relaxed whitespace-pre-line text-ink-700">
               {settings.openingHoursText || 'Please call to check our hours.'}
-            </p>
-          </Card>
-
-          <Card>
-            <h2 className="text-sm font-bold tracking-wide text-ink-900 uppercase">
+            </dd>
+          </div>
+          <div>
+            <dt className="text-xs font-semibold tracking-[0.14em] text-ink-400 uppercase">
               Where to find us
-            </h2>
-            <p className="mt-2 text-sm leading-relaxed text-ink-500">{settings.address}</p>
-            <Link
-              href="/contact"
-              className="mt-3 inline-block text-sm font-semibold text-brand-700 underline underline-offset-2"
-            >
-              Directions and map
-            </Link>
-          </Card>
-
-          <Card>
-            <h2 className="text-sm font-bold tracking-wide text-ink-900 uppercase">
+            </dt>
+            <dd className="mt-3 text-sm leading-relaxed text-ink-700">
+              {settings.address}
+              <Link
+                href="/contact"
+                className="mt-2 block text-brand-700 underline underline-offset-4"
+              >
+                Directions and map
+              </Link>
+            </dd>
+          </div>
+          <div>
+            <dt className="text-xs font-semibold tracking-[0.14em] text-ink-400 uppercase">
               Ring the clinic
-            </h2>
-            {settings.phonePrimary ? (
-              <a
-                href={telHref(settings.phonePrimary)}
-                className="mt-2 block text-xl font-bold text-brand-700 underline underline-offset-4"
+            </dt>
+            <dd className="mt-3">
+              {settings.phonePrimary ? (
+                <a
+                  href={telHref(settings.phonePrimary)}
+                  className="block font-serif text-2xl text-brand-700 underline underline-offset-4"
+                >
+                  {settings.phonePrimary}
+                </a>
+              ) : null}
+              {settings.phoneSecondary ? (
+                <a
+                  href={telHref(settings.phoneSecondary)}
+                  className="mt-1 block text-sm text-brand-700 underline underline-offset-4"
+                >
+                  {settings.phoneSecondary}
+                </a>
+              ) : null}
+            </dd>
+          </div>
+        </dl>
+      </Container>
+
+      {/* Promos: a tinted strip, not two matching cards. */}
+      {promos.length > 0 ? (
+        <section className="border-y border-accent-200 bg-accent-50">
+          <Container className="py-10">
+            <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
+              <h2 className="text-xl text-accent-800 sm:text-2xl">Running at the moment</h2>
+              <Link
+                href="/promos"
+                className="text-sm font-medium text-accent-800 underline underline-offset-4"
               >
-                {settings.phonePrimary}
-              </a>
-            ) : null}
-            {settings.phoneSecondary ? (
-              <a
-                href={telHref(settings.phoneSecondary)}
-                className="mt-1 block text-base font-semibold text-brand-700 underline underline-offset-4"
+                All promos
+              </Link>
+            </div>
+            <ul className="mt-6 divide-y divide-accent-200">
+              {promos.slice(0, 2).map((promo) => (
+                <li key={promo.id} className="py-4 first:pt-0 last:pb-0">
+                  <h3 className="font-serif text-lg text-accent-800">{promo.title}</h3>
+                  <p className="mt-1.5 max-w-2xl text-sm leading-relaxed text-ink-700">
+                    {promo.body}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          </Container>
+        </section>
+      ) : null}
+
+      {/* What we do: a numbered list, not a card grid. */}
+      <Container className="py-12">
+        <SectionHeading action={{ href: '/services', label: 'All services' }}>
+          What we do
+        </SectionHeading>
+        <ol className="mt-6 space-y-7">
+          {WHAT_WE_DO.map((item, i) => (
+            <li key={item.title} className="flex gap-4 sm:gap-6">
+              <span
+                aria-hidden="true"
+                className="mt-1 w-6 shrink-0 font-serif text-lg text-brand-300"
               >
-                {settings.phoneSecondary}
-              </a>
-            ) : null}
-          </Card>
+                {String(i + 1).padStart(2, '0')}
+              </span>
+              <div className="max-w-2xl">
+                <h3 className="font-serif text-lg text-ink-900">{item.title}</h3>
+                <p className="mt-1.5 text-sm leading-relaxed text-ink-500">{item.body}</p>
+              </div>
+            </li>
+          ))}
+        </ol>
+        <div className="mt-8">
+          <ButtonLink href="/prices" variant="secondary">
+            What things cost
+          </ButtonLink>
         </div>
       </Container>
 
-      {/* Promos */}
-      {promos.length > 0 ? (
-        <Container className="pb-10">
-          <div className="flex items-baseline justify-between gap-4">
-            <h2 className="text-xl font-bold text-ink-900">Running at the moment</h2>
-            <Link
-              href="/promos"
-              className="text-sm font-semibold text-brand-700 underline underline-offset-2"
-            >
-              All promos
-            </Link>
-          </div>
-          <ul className="mt-4 grid gap-4 sm:grid-cols-2">
-            {promos.slice(0, 2).map((promo) => (
-              <li key={promo.id}>
-                <Callout tone="accent" title={promo.title}>
-                  <p className="line-clamp-3">{promo.body}</p>
-                </Callout>
+      {/* Before you come: a definition list, like a notice pinned by the door. */}
+      <section className="border-y border-line bg-surface">
+        <Container className="py-12">
+          <h2 className="text-xl text-ink-900 sm:text-2xl">Before you come</h2>
+          <dl className="mt-6 grid gap-x-10 gap-y-5 sm:grid-cols-2">
+            {BEFORE_YOU_COME.map(([term, detail]) => (
+              <div key={term}>
+                <dt className="text-sm font-semibold text-ink-900">{term}</dt>
+                <dd className="mt-1 text-sm leading-relaxed text-ink-500">{detail}</dd>
+              </div>
+            ))}
+          </dl>
+        </Container>
+      </section>
+
+      {/* Doctors: rows with serif names and a hairline between. */}
+      {doctors.length > 0 ? (
+        <Container className="py-12">
+          <SectionHeading action={{ href: '/doctors', label: 'Clinic days' }}>
+            Who you will see
+          </SectionHeading>
+          <ul className="mt-6 divide-y divide-line">
+            {doctors.map((doctor) => (
+              <li
+                key={doctor.id}
+                className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 py-3.5"
+              >
+                <p className="font-serif text-lg text-ink-900">{doctor.fullName}</p>
+                <p className="text-sm text-ink-500">{doctor.specialty}</p>
               </li>
             ))}
           </ul>
         </Container>
       ) : null}
 
-      {/* What we do */}
-      <section className="border-y border-line bg-surface-sunken">
-        <Container className="py-10">
-          <h2 className="text-xl font-bold text-ink-900">What we do</h2>
-          <ul className="mt-5 grid gap-4 sm:grid-cols-3">
-            {WHAT_WE_DO.map((item) => (
-              <li key={item.title}>
-                <Card className="h-full">
-                  <h3 className="font-bold text-ink-900">{item.title}</h3>
-                  <p className="mt-2 text-sm leading-relaxed text-ink-500">{item.body}</p>
-                </Card>
-              </li>
-            ))}
-          </ul>
-          <div className="mt-6 flex flex-wrap gap-3">
-            <ButtonLink href="/services" variant="secondary">
-              All our services
-            </ButtonLink>
-            <ButtonLink href="/prices" variant="secondary">
-              What things cost
-            </ButtonLink>
-          </div>
-        </Container>
-      </section>
-
-      {/* Before you come */}
-      <Container className="py-10">
-        <div className="grid gap-8 lg:grid-cols-2">
-          <div>
-            <h2 className="text-xl font-bold text-ink-900">Before you come</h2>
-            <ul className="mt-4 space-y-3">
-              {BEFORE_YOU_COME.map((item) => (
-                <li key={item} className="flex gap-3 text-sm leading-relaxed text-ink-700">
-                  <span aria-hidden="true" className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-brand-500" />
-                  <span>{item}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          {doctors.length > 0 ? (
-            <div>
-              <div className="flex items-baseline justify-between gap-4">
-                <h2 className="text-xl font-bold text-ink-900">Who you will see</h2>
-                <Link
-                  href="/doctors"
-                  className="text-sm font-semibold text-brand-700 underline underline-offset-2"
-                >
-                  Clinic days
-                </Link>
-              </div>
-              <ul className="mt-4 divide-y divide-line rounded-xl border border-line">
-                {doctors.map((doctor) => (
-                  <li key={doctor.id} className="px-4 py-3">
-                    <p className="font-semibold text-ink-900">{doctor.fullName}</p>
-                    <p className="text-sm text-ink-500">{doctor.specialty}</p>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
-        </div>
-      </Container>
-
-      {/* Map */}
       {settings.mapEmbedUrl ? (
-        <Container className="pb-12">
-          <h2 className="text-xl font-bold text-ink-900">Getting here</h2>
-          <div className="mt-4 overflow-hidden rounded-xl border border-line">
+        <Container className="pb-14">
+          <SectionHeading>Getting here</SectionHeading>
+          <div className="mt-6 overflow-hidden rounded border border-line">
             <iframe
               src={settings.mapEmbedUrl}
               title={`Map showing the location of ${settings.clinicName}`}

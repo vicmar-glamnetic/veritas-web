@@ -58,7 +58,7 @@ export function Calendar({
 
         return (
           <table key={key} className="w-full border-collapse">
-            <caption className="pb-2 text-left text-sm font-bold text-ink-900">
+            <caption className="pb-3 text-left font-serif text-lg text-ink-900">
               {monthLabel(first)}
             </caption>
             <thead>
@@ -92,7 +92,7 @@ export function Calendar({
                             href={hrefFor(date)}
                             aria-current={isSelected ? 'date' : undefined}
                             aria-label={`${dayNumber} ${monthLabel(date)}, slots available`}
-                            className={`flex h-11 w-full items-center justify-center rounded-lg text-sm font-semibold ${
+                            className={`flex h-11 w-full items-center justify-center rounded text-sm font-semibold ${
                               isSelected
                                 ? 'bg-brand-700 text-white'
                                 : 'bg-brand-50 text-brand-800 hover:bg-brand-100'
@@ -103,7 +103,7 @@ export function Calendar({
                         ) : (
                           <span
                             aria-label={`${dayNumber} ${monthLabel(date)}, nothing available`}
-                            className="flex h-11 w-full items-center justify-center rounded-lg text-sm text-ink-400"
+                            className="flex h-11 w-full items-center justify-center rounded text-sm text-ink-400"
                           >
                             {dayNumber}
                           </span>

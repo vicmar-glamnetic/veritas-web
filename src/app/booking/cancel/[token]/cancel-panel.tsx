@@ -14,7 +14,7 @@ function Submit() {
     <button
       type="submit"
       disabled={pending}
-      className="inline-flex min-h-[3rem] w-full items-center justify-center rounded-xl bg-red-700 px-5 py-3 text-base font-semibold text-white hover:bg-red-800 disabled:opacity-60 sm:w-auto"
+      className="inline-flex min-h-[3rem] w-full items-center justify-center rounded bg-red-700 px-5 py-3 text-base font-semibold text-white hover:bg-red-800 disabled:opacity-60 sm:w-auto"
     >
       {pending ? 'Cancelling…' : 'Yes, cancel this appointment'}
     </button>
@@ -39,9 +39,9 @@ export function CancelPanel({
     return (
       <div
         role="status"
-        className="rounded-xl border border-brand-200 bg-brand-50 px-5 py-6"
+        className="rounded border border-brand-200 bg-brand-50 px-5 py-6"
       >
-        <p className="text-lg font-bold text-brand-900">
+        <p className="font-serif text-xl text-brand-900">
           {isFresh ? 'That is cancelled' : 'This appointment is already cancelled'}
         </p>
         <p className="mt-2 text-sm leading-relaxed text-ink-700">
@@ -52,13 +52,13 @@ export function CancelPanel({
         <div className="mt-5 flex flex-col gap-3 sm:flex-row">
           <Link
             href="/book"
-            className="inline-flex min-h-[3rem] items-center justify-center rounded-xl bg-brand-700 px-5 py-3 text-base font-semibold text-white hover:bg-brand-800"
+            className="inline-flex min-h-[3rem] items-center justify-center rounded bg-brand-700 px-5 py-3 text-base font-semibold text-white hover:bg-brand-800"
           >
             Book another appointment
           </Link>
           <a
             href={telHref}
-            className="inline-flex min-h-[3rem] items-center justify-center rounded-xl border border-line bg-surface px-5 py-3 text-base font-semibold text-ink-900 hover:bg-surface-sunken"
+            className="inline-flex min-h-[3rem] items-center justify-center rounded border border-line bg-surface px-5 py-3 text-base font-semibold text-ink-900 hover:bg-surface-sunken"
           >
             Ring {clinicPhone}
           </a>
@@ -72,7 +72,7 @@ export function CancelPanel({
       {state.status === 'error' ? (
         <div
           role="alert"
-          className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-800"
+          className="rounded border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-800"
         >
           {state.message}
         </div>
@@ -89,7 +89,7 @@ export function CancelPanel({
         <Submit />
         <Link
           href="/"
-          className="inline-flex min-h-[3rem] items-center justify-center rounded-xl border border-line bg-surface px-5 py-3 text-base font-semibold text-ink-900 hover:bg-surface-sunken"
+          className="inline-flex min-h-[3rem] items-center justify-center rounded border border-line bg-surface px-5 py-3 text-base font-semibold text-ink-900 hover:bg-surface-sunken"
         >
           Keep my appointment
         </Link>

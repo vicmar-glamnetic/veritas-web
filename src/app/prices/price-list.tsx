@@ -34,7 +34,7 @@ export function PriceList({ items }: { items: PriceItem[] }) {
 
   return (
     <div>
-      <div className="rounded-xl border border-line bg-surface p-4">
+      <div className="border-b border-line-strong pb-5">
         <label htmlFor="price-search" className="block text-sm font-semibold text-ink-900">
           Look for a test
         </label>
@@ -45,7 +45,7 @@ export function PriceList({ items }: { items: PriceItem[] }) {
           onChange={(event) => setQuery(event.target.value)}
           placeholder="e.g. CBC, urinalysis, ultrasound"
           autoComplete="off"
-          className="mt-2 block w-full rounded-lg border border-line bg-surface px-3.5 py-3 text-base text-ink-900 placeholder:text-ink-400"
+          className="mt-2 block w-full rounded border border-line-strong bg-surface px-3.5 py-3 text-base text-ink-900 placeholder:text-ink-400"
         />
         <p aria-live="polite" className="mt-2 text-sm text-ink-500">
           {trimmed
@@ -55,9 +55,9 @@ export function PriceList({ items }: { items: PriceItem[] }) {
       </div>
 
       {matches.length === 0 ? (
-        <div className="mt-6 rounded-xl border border-line bg-surface-sunken px-5 py-8 text-center">
-          <p className="font-semibold text-ink-900">Nothing here matches that.</p>
-          <p className="mx-auto mt-2 max-w-md text-sm text-ink-500">
+        <div className="mt-10 border-l-2 border-line-strong py-2 pl-5">
+          <p className="font-serif text-lg text-ink-900">Nothing here matches that.</p>
+          <p className="mt-2 max-w-md text-sm text-ink-500">
             We may still do it. Not every test we offer is on this list, so ring the
             clinic and ask.
           </p>
@@ -68,22 +68,25 @@ export function PriceList({ items }: { items: PriceItem[] }) {
           if (groupItems.length === 0) return null;
 
           return (
-            <section key={group.key} className="mt-8" aria-labelledby={`price-${group.key}`}>
-              <h2 id={`price-${group.key}`} className="text-lg font-bold text-ink-900">
+            <section key={group.key} className="mt-10" aria-labelledby={`price-${group.key}`}>
+              <h2
+                id={`price-${group.key}`}
+                className="border-t border-line-strong pt-4 text-xl text-ink-900"
+              >
                 {group.heading}
               </h2>
-              <ul className="mt-3 divide-y divide-line rounded-xl border border-line">
+              <ul className="mt-4 divide-y divide-line border-t border-line">
                 {groupItems.map((item) => (
-                  <li key={item.id} className="px-4 py-3.5">
-                    <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-                      <p className="font-medium text-ink-900">{item.name}</p>
-                      <p className="text-base font-bold text-brand-700 tabular-nums">
+                  <li key={item.id} className="py-3.5">
+                    <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
+                      <p className="text-ink-900">{item.name}</p>
+                      <p className="font-semibold text-brand-700 tabular-nums">
                         {formatPhp(item.pricePhp)}
                       </p>
                     </div>
                     {item.prepInstructions ? (
-                      <p className="mt-1.5 text-sm leading-relaxed text-ink-500">
-                        <span className="font-semibold text-ink-700">Prepare: </span>
+                      <p className="mt-1.5 max-w-2xl text-sm leading-relaxed text-ink-500">
+                        <span className="font-medium text-ink-700">Prepare: </span>
                         {item.prepInstructions}
                       </p>
                     ) : null}

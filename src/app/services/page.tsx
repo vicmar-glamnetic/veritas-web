@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 
-import { ButtonLink, Callout, Card, Container, PageHeader } from '@/components/ui';
+import { ButtonLink, Callout, Container, PageHeader, SectionHeading } from '@/components/ui';
 import { formatPhp } from '@/lib/money';
 import { getActiveServices, type Service } from '@/lib/queries';
 
@@ -60,20 +60,20 @@ const CATEGORY_SECTIONS = [
 
 function ServiceList({ items }: { items: Service[] }) {
   return (
-    <ul className="mt-4 divide-y divide-line rounded-xl border border-line">
+    <ul className="mt-5 divide-y divide-line border-t border-line">
       {items.map((service) => (
-        <li key={service.id} className="px-4 py-3.5">
-          <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-            <p className="font-semibold text-ink-900">{service.name}</p>
+        <li key={service.id} className="py-3.5">
+          <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
+            <p className="text-ink-900">{service.name}</p>
             {service.isListedOnline ? (
-              <p className="text-base font-bold text-brand-700 tabular-nums">
+              <p className="font-semibold text-brand-700 tabular-nums">
                 {formatPhp(service.pricePhp)}
               </p>
             ) : null}
           </div>
           {service.prepInstructions ? (
-            <p className="mt-1.5 text-sm leading-relaxed text-ink-500">
-              <span className="font-semibold text-ink-700">Prepare: </span>
+            <p className="mt-1.5 max-w-2xl text-sm leading-relaxed text-ink-500">
+              <span className="font-medium text-ink-700">Prepare: </span>
               {service.prepInstructions}
             </p>
           ) : null}
@@ -95,29 +95,27 @@ export default async function ServicesPage() {
 
       <Container className="py-10">
         <section aria-labelledby="explainers">
-          <h2 id="explainers" className="text-xl font-bold text-ink-900">
+          <h2 id="explainers" className="text-xl text-ink-900 sm:text-2xl">
             What actually happens
           </h2>
-          <ul className="mt-5 grid gap-4 sm:grid-cols-2">
+          <dl className="mt-6 space-y-6 border-t border-line pt-6">
             {EXPLAINERS.map((item) => (
-              <li key={item.title}>
-                <Card className="h-full">
-                  <h3 className="font-bold text-ink-900">{item.title}</h3>
-                  <p className="mt-2 text-sm leading-relaxed text-ink-500">{item.body}</p>
-                </Card>
-              </li>
+              <div key={item.title} className="sm:grid sm:grid-cols-[13rem_1fr] sm:gap-8">
+                <dt className="font-serif text-lg text-ink-900">{item.title}</dt>
+                <dd className="mt-1.5 max-w-2xl text-sm leading-relaxed text-ink-500 sm:mt-0">
+                  {item.body}
+                </dd>
+              </div>
             ))}
-          </ul>
+          </dl>
         </section>
 
         {CATEGORY_SECTIONS.map((section) => {
           const items = services.filter((s) => s.category === section.key);
           if (items.length === 0) return null;
           return (
-            <section key={section.key} className="mt-12" aria-labelledby={`cat-${section.key}`}>
-              <h2 id={`cat-${section.key}`} className="text-xl font-bold text-ink-900">
-                {section.heading}
-              </h2>
+            <section key={section.key} className="mt-14" aria-labelledby={`cat-${section.key}`}>
+              <SectionHeading>{section.heading}</SectionHeading>
               {section.note ? (
                 <p className="mt-2 text-sm text-ink-500">{section.note}</p>
               ) : null}

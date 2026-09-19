@@ -41,9 +41,9 @@ export default async function CancelBookingPage({
 
       <Container className="py-10">
         <div className="max-w-lg">
-          <div className="rounded-xl border border-line">
+          <div className="rounded border border-line">
             <div className="border-b border-line px-4 py-3">
-              <p className="text-lg font-bold tracking-wider text-ink-900">
+              <p className="font-serif text-xl tracking-wider text-ink-900">
                 {booking.referenceCode}
               </p>
             </div>

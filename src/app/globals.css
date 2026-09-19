@@ -3,41 +3,61 @@
 /*
  * Veritas Clinic design tokens.
  *
- * No web font is loaded. Most visitors arrive from Facebook on a low-end Android
- * phone over mobile data, and the system stack costs zero bytes and renders instantly.
+ * Two rules shape everything here.
  *
- * The palette is deliberately light-only. A clinic site is read in bright daylight and
- * printed out by staff; a dark theme is a maintenance burden with no audience here.
+ * 1. No web font is loaded. Most visitors arrive from a Facebook link on a low-end
+ *    Android phone over mobile data, and the system stack costs zero bytes. The serif
+ *    below is the one already on the device; it carries the whole character of the site
+ *    and downloads nothing.
+ *
+ * 2. Warm paper, not screen white. A clinic is a physical place with a printed sign and
+ *    a letterhead, and an off-white ground with a real serif reads that way. Pure white
+ *    plus a saturated teal is what every template looks like.
+ *
+ * The palette is light-only on purpose: this is read in daylight and printed by staff.
  */
 
 @theme {
-  --color-brand-50: #eefaf7;
-  --color-brand-100: #d3f2ea;
-  --color-brand-200: #a9e5d8;
-  --color-brand-300: #72d0be;
-  --color-brand-400: #3fb3a0;
-  --color-brand-500: #1f9686;
-  --color-brand-600: #10786d;
-  --color-brand-700: #0e6058;
-  --color-brand-800: #0f4c47;
-  --color-brand-900: #0e3f3b;
+  /* Pine green. Darker and less saturated than a stock teal. */
+  --color-brand-50: #eef4f0;
+  --color-brand-100: #d6e6dc;
+  --color-brand-200: #adcdba;
+  --color-brand-300: #7aae91;
+  --color-brand-400: #4c8e6c;
+  --color-brand-500: #2f7354;
+  --color-brand-600: #1f5c42;
+  --color-brand-700: #184a35;
+  --color-brand-800: #133c2b;
+  --color-brand-900: #102f22;
 
-  --color-ink-900: #10211f;
-  --color-ink-700: #294340;
-  --color-ink-500: #4d635f;
-  --color-ink-400: #5e726f;
+  /* Warm greys, not blue-greys. */
+  --color-ink-900: #1c1a16;
+  --color-ink-700: #3d3931;
+  --color-ink-500: #5f594e;
+  --color-ink-400: #6a6355;
 
+  --color-paper: #fbf9f5;
   --color-surface: #ffffff;
-  --color-surface-sunken: #f3f7f6;
-  --color-line: #dbe6e3;
+  --color-surface-sunken: #f4f1ea;
+  --color-line: #e2ddd1;
+  --color-line-strong: #cfc8b8;
 
-  --color-accent-50: #fff8eb;
-  --color-accent-200: #fde3ab;
-  --color-accent-600: #b4740a;
-  --color-accent-800: #7a4f07;
+  /* Terracotta rather than amber: warmer, less "alert banner". */
+  --color-accent-50: #fdf3ec;
+  --color-accent-200: #f2d5c0;
+  --color-accent-600: #a8551f;
+  --color-accent-800: #7a3c13;
 
   --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
     "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+
+  /*
+   * Already on every device, so it downloads nothing. This is where the character
+   * comes from. Android has none of the first few and lands on Noto Serif, which is
+   * named explicitly rather than left to the generic keyword.
+   */
+  --font-serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua",
+    Georgia, "Noto Serif", "Times New Roman", serif;
 }
 
 @layer base {
@@ -47,11 +67,19 @@
   }
 
   body {
-    background: var(--color-surface);
+    background: var(--color-paper);
     color: var(--color-ink-900);
     font-family: var(--font-sans);
-    /* Stops iOS Safari inflating text in landscape. */
     text-size-adjust: 100%;
+  }
+
+  /* Headings carry the serif; body copy stays sans for legibility at small sizes. */
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-serif);
+    font-weight: 600;
+    letter-spacing: -0.01em;
   }
 
   /*
@@ -93,5 +121,13 @@
     background: var(--color-brand-700);
     color: #fff;
     border-radius: 0.5rem;
+  }
+
+  /*
+   * A hairline rule used instead of a box wherever a card would be reflexive. Most of
+   * the "template" feeling came from putting a border and a radius around everything.
+   */
+  .rule {
+    border-top: 1px solid var(--color-line);
   }
 }

@@ -124,7 +124,7 @@ export default async function BookPage({
       />
 
       <Container className="py-10">
-        <ol className="space-y-6">
+        <ol className="space-y-2">
           {/* ---------------- Step 1: service, then doctor ---------------- */}
           <Step
             number={1}
@@ -184,7 +184,7 @@ export default async function BookPage({
 
                   {chosenDay ? (
                     <div>
-                      <h3 className="text-sm font-bold text-ink-900">
+                      <h3 className="font-serif text-lg text-ink-900">
                         Times on {formatManilaDate(chosenDay.slots[0]!.start)}
                       </h3>
                       <ul className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-4">
@@ -197,7 +197,7 @@ export default async function BookPage({
                                 session: slot.sessionId,
                                 start: slot.start.toISOString(),
                               })}
-                              className="flex min-h-[3rem] items-center justify-center rounded-lg border border-line bg-surface px-2 text-sm font-semibold text-ink-900 hover:border-brand-300 hover:bg-brand-50"
+                              className="flex min-h-[3rem] items-center justify-center rounded border border-line-strong bg-surface px-2 text-sm font-semibold text-ink-900 hover:border-brand-400 hover:bg-brand-50"
                             >
                               {formatManilaTime(slot.start)}
                             </Link>
@@ -254,8 +254,8 @@ export default async function BookPage({
           </Step>
         </ol>
 
-        <div className="mt-10 rounded-xl border border-line bg-surface-sunken px-5 py-4">
-          <h2 className="text-sm font-bold text-ink-900">Would rather just ring us?</h2>
+        <div className="mt-8 border-t border-line pt-6">
+          <h2 className="font-serif text-lg text-ink-900">Would rather just ring us?</h2>
           <p className="mt-1.5 text-sm leading-relaxed text-ink-500">
             Call{' '}
             <a
@@ -295,30 +295,28 @@ function Step({
 }) {
   return (
     <li
-      className={`rounded-xl border bg-surface ${
-        disabled ? 'border-line opacity-55' : 'border-line'
-      }`}
+      className={`border-t border-line-strong pt-5 ${disabled ? 'opacity-50' : ''}`}
       aria-current={!disabled && !done ? 'step' : undefined}
     >
-      <div className="flex items-start gap-3 px-5 py-4">
+      <div className="flex items-baseline gap-4">
         <span
           aria-hidden="true"
-          className={`grid h-7 w-7 shrink-0 place-items-center rounded-full text-sm font-bold ${
-            done ? 'bg-brand-700 text-white' : 'bg-surface-sunken text-ink-500'
+          className={`w-6 shrink-0 font-serif text-lg ${
+            done ? 'text-brand-600' : 'text-brand-300'
           }`}
         >
-          {done ? '✓' : number}
+          {done ? '\u2713' : String(number).padStart(2, '0')}
         </span>
         <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-            <h2 className="font-bold text-ink-900">
+          <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
+            <h2 className="font-serif text-xl text-ink-900">
               <span className="sr-only">Step {number}: </span>
               {title}
             </h2>
             {done && !hideChange ? (
               <Link
                 href={changeHref}
-                className="text-sm font-semibold text-brand-700 underline underline-offset-2"
+                className="text-sm text-brand-700 underline underline-offset-4"
               >
                 Change
               </Link>
@@ -327,7 +325,7 @@ function Step({
           {summary ? <p className="mt-1 text-sm text-ink-500">{summary}</p> : null}
         </div>
       </div>
-      {children ? <div className="border-t border-line px-5 py-5">{children}</div> : null}
+      {children ? <div className="mt-6 pb-8 sm:pl-10">{children}</div> : null}
     </li>
   );
 }
@@ -343,19 +341,19 @@ async function ServicePicker() {
 
         return (
           <div key={category.key}>
-            <h3 className="text-sm font-bold tracking-wide text-ink-700 uppercase">
+            <h3 className="text-xs font-semibold tracking-[0.14em] text-ink-400 uppercase">
               {category.label}
             </h3>
-            <ul className="mt-3 grid gap-2 sm:grid-cols-2">
+            <ul className="mt-3 divide-y divide-line border-t border-line">
               {items.map((item) => (
                 <li key={item.id}>
                   <Link
                     href={buildHref({ service: item.id })}
-                    className="flex min-h-[3.25rem] items-center justify-between gap-3 rounded-lg border border-line bg-surface px-4 py-3 text-sm font-semibold text-ink-900 hover:border-brand-300 hover:bg-brand-50"
+                    className="flex min-h-[3.25rem] items-center justify-between gap-4 py-3 text-ink-900 hover:text-brand-700"
                   >
                     <span>{item.name}</span>
                     {item.isListedOnline ? (
-                      <span className="shrink-0 text-sm font-bold text-brand-700 tabular-nums">
+                      <span className="shrink-0 text-sm font-semibold text-brand-700 tabular-nums">
                         {formatPhp(item.pricePhp)}
                       </span>
                     ) : null}
@@ -389,17 +387,17 @@ function DoctorPicker({
 
   return (
     <div>
-      <h3 className="text-sm font-bold tracking-wide text-ink-700 uppercase">
+      <h3 className="text-xs font-semibold tracking-[0.14em] text-ink-400 uppercase">
         Which doctor?
       </h3>
-      <ul className="mt-3 grid gap-2 sm:grid-cols-2">
+      <ul className="mt-3 divide-y divide-line border-t border-line">
         {doctors.map((doc) => (
           <li key={doc.id}>
             <Link
               href={buildHref({ service: serviceId, doctor: doc.id })}
-              className="block min-h-[3.25rem] rounded-lg border border-line bg-surface px-4 py-3 hover:border-brand-300 hover:bg-brand-50"
+              className="block py-3.5 hover:text-brand-700"
             >
-              <span className="block text-sm font-semibold text-ink-900">{doc.fullName}</span>
+              <span className="block font-serif text-lg text-ink-900">{doc.fullName}</span>
               <span className="block text-sm text-ink-500">{doc.specialty}</span>
             </Link>
           </li>
@@ -424,7 +422,7 @@ function SlotSummary({
 }) {
   return (
     <div>
-      <dl className="divide-y divide-line rounded-xl border border-line bg-surface-sunken">
+      <dl className="divide-y divide-line rounded border border-line bg-surface">
         <div className="flex justify-between gap-4 px-4 py-3">
           <dt className="text-sm text-ink-500">What</dt>
           <dd className="text-right text-sm font-semibold text-ink-900">{serviceName}</dd>
@@ -449,8 +447,8 @@ function SlotSummary({
       </dl>
 
       {prep ? (
-        <div className="mt-4 rounded-xl border border-accent-200 bg-accent-50 px-4 py-3.5">
-          <p className="text-sm font-bold text-accent-800">Before you come</p>
+        <div className="mt-4 rounded border-l-2 border-accent-200 bg-accent-50 px-4 py-3.5">
+          <p className="text-sm font-semibold text-accent-800">Before you come</p>
           <p className="mt-1 text-sm leading-relaxed text-ink-700">{prep}</p>
         </div>
       ) : null}

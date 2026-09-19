@@ -1,7 +1,15 @@
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 
-/** Standard page heading block. Every page has exactly one `h1`. */
+/**
+ * Shared furniture.
+ *
+ * The guiding decision: a hairline rule instead of a bordered, rounded box wherever a
+ * card would be the reflexive choice. Putting everything in an identical card is most
+ * of what made the first draft look generated.
+ */
+
+/** Standard page heading. Every page has exactly one `h1`. */
 export function PageHeader({
   title,
   lead,
@@ -12,11 +20,13 @@ export function PageHeader({
   children?: ReactNode;
 }) {
   return (
-    <div className="border-b border-line bg-surface-sunken">
-      <div className="mx-auto max-w-5xl px-4 py-9 sm:py-12">
-        <h1 className="text-2xl font-bold tracking-tight text-ink-900 sm:text-3xl">{title}</h1>
+    <div className="border-b border-line bg-surface">
+      <div className="mx-auto max-w-5xl px-4 py-10 sm:py-14">
+        <h1 className="text-3xl leading-tight text-ink-900 sm:text-4xl">{title}</h1>
         {lead ? (
-          <p className="mt-3 max-w-2xl text-base leading-relaxed text-ink-500">{lead}</p>
+          <p className="mt-4 max-w-xl text-base leading-relaxed text-ink-500 sm:text-lg">
+            {lead}
+          </p>
         ) : null}
         {children}
       </div>
@@ -34,6 +44,32 @@ export function Container({
   return <div className={`mx-auto max-w-5xl px-4 ${className}`}>{children}</div>;
 }
 
+/**
+ * A section heading with the small rule above it. Used instead of wrapping the section
+ * in a box, which is the difference between a printed page and a dashboard.
+ */
+export function SectionHeading({
+  children,
+  action,
+}: {
+  children: ReactNode;
+  action?: { href: string; label: string };
+}) {
+  return (
+    <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 border-t border-line-strong pt-4">
+      <h2 className="text-xl text-ink-900 sm:text-2xl">{children}</h2>
+      {action ? (
+        <Link
+          href={action.href}
+          className="text-sm font-medium text-brand-700 underline underline-offset-4 hover:text-brand-800"
+        >
+          {action.label}
+        </Link>
+      ) : null}
+    </div>
+  );
+}
+
 export function Card({
   children,
   className = '',
@@ -42,11 +78,11 @@ export function Card({
   className?: string;
 }) {
   return (
-    <div className={`rounded-xl border border-line bg-surface p-5 ${className}`}>{children}</div>
+    <div className={`rounded border border-line bg-surface p-5 ${className}`}>{children}</div>
   );
 }
 
-/** A tinted aside — used for caveats like "prices may change". */
+/** A tinted aside, for caveats like "prices may change". */
 export function Callout({
   tone = 'brand',
   title,
@@ -62,7 +98,7 @@ export function Callout({
   } as const;
 
   return (
-    <div className={`rounded-xl border px-4 py-3.5 text-sm leading-relaxed ${tones[tone]}`}>
+    <div className={`rounded border-l-2 px-4 py-3.5 text-sm leading-relaxed ${tones[tone]}`}>
       {title ? <p className="font-semibold">{title}</p> : null}
       <div className={title ? 'mt-1' : undefined}>{children}</div>
     </div>
@@ -70,8 +106,8 @@ export function Callout({
 }
 
 /**
- * Primary call to action. Tap targets are at least 44px tall throughout — these are
- * pressed with a thumb, often one-handed.
+ * Tap targets stay at least 44px tall throughout. These are pressed with a thumb, often
+ * one-handed, on a bus.
  */
 export function ButtonLink({
   href,
@@ -86,10 +122,10 @@ export function ButtonLink({
 }) {
   const variants = {
     primary: 'bg-brand-700 text-white hover:bg-brand-800',
-    secondary: 'border border-line bg-surface text-ink-900 hover:bg-surface-sunken',
+    secondary: 'border border-line-strong bg-surface text-ink-900 hover:bg-surface-sunken',
   } as const;
 
-  const classes = `inline-flex min-h-[3rem] items-center justify-center rounded-xl px-5 py-3 text-base font-semibold ${variants[variant]} ${className}`;
+  const classes = `inline-flex min-h-[3rem] items-center justify-center rounded px-5 py-3 text-base font-semibold ${variants[variant]} ${className}`;
 
   return href.startsWith('/') ? (
     <Link href={href} className={classes}>
@@ -102,10 +138,10 @@ export function ButtonLink({
   );
 }
 
-/** Long-form text (privacy notice, plain-language explanations). */
+/** Long-form text: the privacy notice, plain-language explanations. */
 export function Prose({ children }: { children: ReactNode }) {
   return (
-    <div className="max-w-2xl space-y-4 text-base leading-relaxed text-ink-700 [&_h2]:mt-8 [&_h2]:text-lg [&_h2]:font-bold [&_h2]:text-ink-900 [&_h3]:mt-6 [&_h3]:font-semibold [&_h3]:text-ink-900 [&_li]:ml-5 [&_li]:list-disc [&_ul]:space-y-2 [&_a]:text-brand-700 [&_a]:underline [&_a]:underline-offset-2">
+    <div className="max-w-2xl space-y-4 text-base leading-relaxed text-ink-700 [&_h2]:mt-9 [&_h2]:text-xl [&_h2]:text-ink-900 [&_h3]:mt-6 [&_h3]:font-semibold [&_h3]:text-ink-900 [&_li]:ml-5 [&_li]:list-disc [&_ul]:space-y-2 [&_a]:text-brand-700 [&_a]:underline [&_a]:underline-offset-4">
       {children}
     </div>
   );

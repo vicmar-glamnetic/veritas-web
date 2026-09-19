@@ -13,15 +13,16 @@ export const NAV_ITEMS = [
 ] as const;
 
 /**
- * The only client component in the header. It exists solely to mark the current page
- * with `aria-current`, which screen readers announce and sighted users see as the
- * underlined item.
+ * The only client component in the header. It exists to mark the current page with
+ * `aria-current`, which screen readers announce and sighted users see as the underlined
+ * item. An underline rather than a filled pill: closer to a printed index, and it does
+ * not turn the nav into a row of buttons.
  */
 export function NavLinks() {
   const pathname = usePathname();
 
   return (
-    <ul className="flex items-center gap-1 overflow-x-auto px-4 sm:px-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+    <ul className="flex items-center gap-5 overflow-x-auto px-4 [scrollbar-width:none] sm:gap-7 [&::-webkit-scrollbar]:hidden">
       {NAV_ITEMS.map((item) => {
         const isCurrent =
           item.href === '/' ? pathname === '/' : pathname.startsWith(item.href);
@@ -30,10 +31,10 @@ export function NavLinks() {
             <Link
               href={item.href}
               aria-current={isCurrent ? 'page' : undefined}
-              className={`block rounded-md px-3 py-2.5 text-sm font-medium whitespace-nowrap transition-colors ${
+              className={`block border-b-2 py-2.5 text-sm whitespace-nowrap transition-colors ${
                 isCurrent
-                  ? 'bg-brand-50 text-brand-800'
-                  : 'text-ink-700 hover:bg-surface-sunken hover:text-ink-900'
+                  ? 'border-brand-600 font-semibold text-ink-900'
+                  : 'border-transparent text-ink-500 hover:text-ink-900'
               }`}
             >
               {item.label}

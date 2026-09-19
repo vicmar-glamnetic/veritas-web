@@ -187,9 +187,18 @@ Environment variables are documented in `.env.example`. Never commit a real one.
 
 - Public pages are prerendered and revalidated (`export const revalidate`), so a visitor
   on mobile data gets static HTML. Admin pages will be dynamic.
-- **No web font is loaded.** The system font stack costs zero bytes; the audience is on
-  low-end Android over mobile data.
-- The palette is light-only and every text pair is checked against WCAG AA (4.5:1).
+- **No web font is loaded.** The system stack costs zero bytes; the audience is on
+  low-end Android over mobile data. Headings use `--font-serif`, a system serif stack
+  ending in Noto Serif for Android. That serif carries the whole character of the site
+  and downloads nothing.
+- **Warm paper, not screen white.** `--color-paper` is the page ground, white is reserved
+  for raised surfaces. Pure white plus a saturated teal is what every template looks like.
+- **A hairline rule instead of a bordered, rounded card** wherever a card would be the
+  reflexive choice. Putting everything in an identical rounded box, three to a row, is
+  most of what made the first draft look generated. `SectionHeading` in
+  `src/components/ui.tsx` is the standard treatment.
+- The palette is light-only and every text pair is checked against WCAG AA (4.5:1). Run
+  the contrast check before changing a colour token.
 - Every page renders and every form submits **with JavaScript disabled** — server
   actions progressively enhance. Do not regress this.
 - Queries live in `src/lib/queries.ts`, wrapped in React `cache`. Pages do not query the

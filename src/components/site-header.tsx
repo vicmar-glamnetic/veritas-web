@@ -6,47 +6,49 @@ import { telHref } from '@/lib/mobile';
 import { NavLinks } from './nav-links';
 
 /**
- * Sticky header. The Book button is present on every page at every width, because the
- * whole point of the site is that someone arriving from Facebook can book in a few taps.
+ * The masthead, set like a clinic's sign rather than an app bar: the name in the serif,
+ * the word CLINIC letterspaced beneath it. No monogram tile, which is the single most
+ * template-looking element a site can have.
+ *
+ * The Book button is present at every width, because the whole point of the site is that
+ * someone arriving from Facebook can book in a few taps.
  */
 export async function SiteHeader() {
   const settings = await getSiteSettings();
+  const [firstWord, ...rest] = settings.clinicName.split(' ');
 
   return (
-    <header className="sticky top-0 z-40 border-b border-line bg-surface/95 backdrop-blur-sm">
+    <header className="sticky top-0 z-40 border-b border-line bg-paper/95 backdrop-blur-sm">
       <div className="mx-auto max-w-5xl">
-        <div className="flex items-center justify-between gap-3 px-4 py-3">
-          <Link href="/" className="flex items-center gap-2.5 rounded-md">
-            <span
-              aria-hidden="true"
-              className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-brand-700 text-base font-bold text-white"
-            >
-              V
+        <div className="flex items-center justify-between gap-4 px-4 py-3.5">
+          <Link href="/" className="group -my-1 block rounded py-1">
+            <span className="block font-serif text-xl leading-none font-semibold text-ink-900 sm:text-2xl">
+              {firstWord}
             </span>
-            <span className="text-base leading-tight font-bold text-ink-900 sm:text-lg">
-              {settings.clinicName}
+            <span className="mt-1 block text-[0.68rem] leading-none font-semibold tracking-[0.22em] text-brand-600 uppercase">
+              {rest.join(' ') || 'Clinic'}
             </span>
           </Link>
 
-          <div className="flex shrink-0 items-center gap-2">
+          <div className="flex shrink-0 items-center gap-3">
             {settings.phonePrimary ? (
               <a
                 href={telHref(settings.phonePrimary)}
-                className="hidden rounded-lg border border-line px-3 py-2 text-sm font-semibold text-ink-700 hover:bg-surface-sunken sm:block"
+                className="hidden text-sm font-medium text-ink-700 underline underline-offset-4 hover:text-ink-900 sm:block"
               >
-                Call {settings.phonePrimary}
+                {settings.phonePrimary}
               </a>
             ) : null}
             <Link
               href="/book"
-              className="rounded-lg bg-brand-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-800"
+              className="rounded bg-brand-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-800"
             >
               Book
             </Link>
           </div>
         </div>
 
-        <nav aria-label="Main" className="border-t border-line/70 sm:px-4">
+        <nav aria-label="Main" className="border-t border-line/80">
           <NavLinks />
         </nav>
       </div>

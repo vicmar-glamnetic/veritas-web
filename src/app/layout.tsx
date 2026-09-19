@@ -43,7 +43,7 @@ export const viewport = {
 export default function RootLayout({ children }: LayoutProps<'/'>) {
   return (
     <html lang="en-PH" className="h-full antialiased">
-      <body className="flex min-h-full flex-col bg-surface text-ink-900">
+      <body className="flex min-h-full flex-col bg-paper text-ink-900">
         <a className="skip-link" href="#main">
           Skip to main content
         </a>

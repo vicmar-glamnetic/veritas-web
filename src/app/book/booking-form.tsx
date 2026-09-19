@@ -9,7 +9,7 @@ import { submitBooking, type BookingState } from './actions';
 const INITIAL: BookingState = { status: 'idle' };
 
 const fieldClasses =
-  'mt-1.5 block w-full rounded-lg border bg-surface px-3.5 py-3 text-base text-ink-900 placeholder:text-ink-400';
+  'mt-1.5 block w-full rounded border bg-surface px-3.5 py-3 text-base text-ink-900 placeholder:text-ink-400';
 
 function SubmitButton() {
   const { pending } = useFormStatus();
@@ -17,7 +17,7 @@ function SubmitButton() {
     <button
       type="submit"
       disabled={pending}
-      className="inline-flex min-h-[3.25rem] w-full items-center justify-center rounded-xl bg-brand-700 px-5 py-3 text-base font-semibold text-white hover:bg-brand-800 disabled:opacity-60"
+      className="inline-flex min-h-[3.25rem] w-full items-center justify-center rounded bg-brand-700 px-5 py-3 text-base font-semibold text-white hover:bg-brand-800 disabled:opacity-60"
     >
       {pending ? 'Booking your slot…' : 'Confirm booking'}
     </button>
@@ -97,7 +97,7 @@ export function BookingForm({
       {message ? (
         <div
           role="alert"
-          className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-800"
+          className="rounded border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-800"
         >
           {message}
         </div>
@@ -113,7 +113,7 @@ export function BookingForm({
           autoComplete="name"
           aria-invalid={errors.fullName ? true : undefined}
           aria-describedby={errors.fullName ? 'fullName-error' : undefined}
-          className={`${fieldClasses} ${errors.fullName ? 'border-red-400' : 'border-line'}`}
+          className={`${fieldClasses} ${errors.fullName ? 'border-red-400' : 'border-line-strong'}`}
         />
       </Field>
 
@@ -134,7 +134,7 @@ export function BookingForm({
           placeholder="0917 123 4567"
           aria-invalid={errors.mobile ? true : undefined}
           aria-describedby={errors.mobile ? 'mobile-error' : 'mobile-hint'}
-          className={`${fieldClasses} ${errors.mobile ? 'border-red-400' : 'border-line'}`}
+          className={`${fieldClasses} ${errors.mobile ? 'border-red-400' : 'border-line-strong'}`}
         />
       </Field>
 
@@ -154,7 +154,7 @@ export function BookingForm({
           autoComplete="email"
           aria-invalid={errors.email ? true : undefined}
           aria-describedby={errors.email ? 'email-error' : 'email-hint'}
-          className={`${fieldClasses} ${errors.email ? 'border-red-400' : 'border-line'}`}
+          className={`${fieldClasses} ${errors.email ? 'border-red-400' : 'border-line-strong'}`}
         />
       </Field>
 
@@ -170,7 +170,7 @@ export function BookingForm({
           rows={3}
           defaultValue={prior?.notes ?? ''}
           aria-describedby="notes-hint"
-          className={`${fieldClasses} ${errors.notes ? 'border-red-400' : 'border-line'}`}
+          className={`${fieldClasses} ${errors.notes ? 'border-red-400' : 'border-line-strong'}`}
         />
       </Field>
 
@@ -181,7 +181,7 @@ export function BookingForm({
       </div>
 
       <div
-        className={`rounded-xl border px-4 py-3.5 ${
+        className={`rounded border px-4 py-3.5 ${
           errors.consent ? 'border-red-300 bg-red-50' : 'border-line bg-surface-sunken'
         }`}
       >
@@ -201,7 +201,7 @@ export function BookingForm({
             this appointment, as described in the{' '}
             <Link
               href="/privacy"
-              className="font-medium text-brand-700 underline underline-offset-2"
+              className="font-medium text-brand-700 underline underline-offset-4"
             >
               privacy notice
             </Link>
@@ -235,15 +235,15 @@ function Confirmation({
     <div>
       <div
         role="status"
-        className="rounded-xl border border-brand-200 bg-brand-50 px-5 py-6 text-center"
+        className="rounded border border-brand-200 bg-brand-50 px-5 py-6 text-center"
       >
-        <p className="text-sm font-semibold tracking-wide text-brand-700 uppercase">
+        <p className="text-xs font-semibold tracking-[0.16em] text-brand-700 uppercase">
           You are booked
         </p>
         <p className="mt-3 text-xs font-bold tracking-widest text-brand-700 uppercase">
           Reference code
         </p>
-        <p className="mt-1 text-4xl font-bold tracking-wider text-brand-900">
+        <p className="mt-1 font-serif text-4xl tracking-wider text-brand-900">
           {state.referenceCode}
         </p>
         <p className="mx-auto mt-3 max-w-sm text-sm leading-relaxed text-ink-700">
@@ -251,7 +251,7 @@ function Confirmation({
         </p>
       </div>
 
-      <dl className="mt-6 divide-y divide-line rounded-xl border border-line">
+      <dl className="mt-6 divide-y divide-line rounded border border-line">
         <div className="flex justify-between gap-4 px-4 py-3">
           <dt className="text-sm text-ink-500">What</dt>
           <dd className="text-sm font-semibold text-ink-900">{state.serviceName}</dd>
@@ -269,14 +269,14 @@ function Confirmation({
       </dl>
 
       {state.prepInstructions ? (
-        <div className="mt-5 rounded-xl border border-accent-200 bg-accent-50 px-4 py-3.5">
+        <div className="mt-5 rounded border border-accent-200 bg-accent-50 px-4 py-3.5">
           <p className="text-sm font-bold text-accent-800">Before you come</p>
           <p className="mt-1 text-sm leading-relaxed text-ink-700">{state.prepInstructions}</p>
         </div>
       ) : null}
 
       <div
-        className={`mt-5 rounded-xl border px-4 py-3.5 text-sm leading-relaxed ${
+        className={`mt-5 rounded border px-4 py-3.5 text-sm leading-relaxed ${
           state.emailSent
             ? 'border-line bg-surface-sunken text-ink-700'
             : 'border-accent-200 bg-accent-50 text-accent-800'
@@ -302,13 +302,13 @@ function Confirmation({
       <div className="mt-6 flex flex-col gap-3 sm:flex-row">
         <Link
           href="/"
-          className="inline-flex min-h-[3rem] items-center justify-center rounded-xl border border-line bg-surface px-5 py-3 text-base font-semibold text-ink-900 hover:bg-surface-sunken"
+          className="inline-flex min-h-[3rem] items-center justify-center rounded border border-line bg-surface px-5 py-3 text-base font-semibold text-ink-900 hover:bg-surface-sunken"
         >
           Back to the home page
         </Link>
         <Link
           href={`/booking/${state.referenceCode}`}
-          className="inline-flex min-h-[3rem] items-center justify-center rounded-xl border border-line bg-surface px-5 py-3 text-base font-semibold text-ink-900 hover:bg-surface-sunken"
+          className="inline-flex min-h-[3rem] items-center justify-center rounded border border-line bg-surface px-5 py-3 text-base font-semibold text-ink-900 hover:bg-surface-sunken"
         >
           View or cancel this booking
         </Link>
