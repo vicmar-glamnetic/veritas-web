@@ -43,6 +43,23 @@ Keep the dependency list short — it is currently Drizzle, `pg`, Zod and Resend
 **Passwords** use `scrypt` from `node:crypto` (`src/lib/password.ts`), not bcrypt or
 argon2, to avoid a native dependency.
 
+## Neon
+
+The project is linked to Neon (`.neon`, gitignored). `neon link` / `neon deploy` pull
+`DATABASE_URL` into `.env.local` automatically, so the connection string is never typed
+by hand and never committed.
+
+- **Region is `aws-ap-southeast-1` (Singapore)**, chosen because the patients are in the
+  Philippines: about 54ms from Manila against roughly 220ms to a US region. A Neon
+  project's region cannot be changed afterwards. **Vercel's function region must be set
+  to Singapore too**, or the saving is thrown away on every query.
+- **Postgres 18.** The schema and the whole test suite are verified against it.
+- `neon.ts` is a Neon-level policy file (Functions, Auth, storage). It is deliberately
+  empty: the SQL schema belongs to Drizzle, and `auth` stays off because staff login is
+  ours, per the no-third-party-auth constraint.
+- Two databases live on the `main` branch: `neondb` for the app, and `veritas_test`,
+  which is empty and exists only for `npm test`.
+
 ## Database client
 
 `src/db/client.ts` builds a Drizzle client over a **node-postgres** pool;
@@ -187,15 +204,17 @@ npm test        # everything; needs a database
 npm run test:unit   # pure functions only, no database
 ```
 
-Database tests need `TEST_DATABASE_URL` (or `DATABASE_URL`) pointing at a Postgres with
-migrations applied and **no seed data**. Seeded sessions would otherwise show up in
-availability results, because laboratory and imaging sessions are not scoped to a
-doctor and so every session of that category is a candidate.
+Database tests need `TEST_DATABASE_URL` pointing at a Postgres with migrations applied
+and **no seed data**. Seeded sessions would otherwise show up in availability results,
+because laboratory and imaging sessions are not scoped to a doctor and so every session
+of that category is a candidate.
+
+`.env.local` already points this at the `veritas_test` database on Neon. To recreate it,
+or to run against a local cluster instead:
 
 ```
-createdb veritas_suite
-psql -d veritas_suite -f drizzle/0000_*.sql
-TEST_DATABASE_URL=postgresql://localhost/veritas_suite npm test
+neon databases create --name veritas_test --branch main
+DATABASE_URL=<that database url> npx drizzle-kit migrate
 ```
 
 Conventions that keep these tests honest:

@@ -24,12 +24,15 @@ export function createDb(
     throw new Error('DATABASE_URL is not set. Copy .env.example to .env.local and fill it in.');
   }
 
+  // Neon requires TLS and presents a publicly-trusted certificate, so verify it
+  // properly. Turning verification off would leave the connection open to a
+  // man-in-the-middle, which is not a trade worth making for patient data. A local
+  // cluster offers no TLS at all, hence the split.
+  const needsTls = /neon\.tech|sslmode=require/.test(connectionString);
+
   const pool = new Pool({
     connectionString,
-    // Neon requires TLS. A local cluster does not offer it.
-    ssl: /neon\.tech|sslmode=require/.test(connectionString)
-      ? { rejectUnauthorized: false }
-      : false,
+    ssl: needsTls ? { rejectUnauthorized: true } : false,
     // The concurrency test raises this so its parallel attempts really do overlap.
     max: options.max ?? 5,
     idleTimeoutMillis: 30_000,
