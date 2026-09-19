@@ -16,7 +16,10 @@ import * as schema from './schema';
  * Neon accepts ordinary Postgres connections on its pooled (`-pooler`) endpoint, which
  * is what the deployed app uses.
  */
-export function createDb(connectionString = process.env.DATABASE_URL) {
+export function createDb(
+  connectionString = process.env.DATABASE_URL,
+  options: { max?: number } = {},
+) {
   if (!connectionString) {
     throw new Error('DATABASE_URL is not set. Copy .env.example to .env.local and fill it in.');
   }
@@ -27,7 +30,8 @@ export function createDb(connectionString = process.env.DATABASE_URL) {
     ssl: /neon\.tech|sslmode=require/.test(connectionString)
       ? { rejectUnauthorized: false }
       : false,
-    max: 5,
+    // The concurrency test raises this so its parallel attempts really do overlap.
+    max: options.max ?? 5,
     idleTimeoutMillis: 30_000,
     connectionTimeoutMillis: 10_000,
   });

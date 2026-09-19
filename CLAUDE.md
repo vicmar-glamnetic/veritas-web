@@ -68,9 +68,15 @@ Full schema with comments: `src/db/schema.ts`. Things that are easy to get wrong
   Postgres `extract(dow)`.
 - **Calendar dates** (blackouts, promo windows, date of birth) are `date` in
   `mode: 'string'`, so a timezone conversion can never shift them by a day.
-- **`capacity` vs `online_capacity`** — `capacity` is total seats per slot;
-  `online_capacity` is how many the booking form may give away. The difference is held
-  back for walk-ins. A check constraint enforces `online_capacity <= capacity`.
+- **`capacity` vs `online_capacity`** — `capacity` is how many patients a session takes
+  **in total, across all its slots**, not per slot. `online_capacity` is how many of
+  those places the booking form may give away; the rest are held for walk-ins. A check
+  constraint enforces `online_capacity <= capacity`.
+
+  So Dra. Reyes' 9-to-12 clinic in 20-minute slots has 9 slots, sees 9 patients, and
+  offers 6 of those places online. `distributeOnlineCapacity` spreads those 6 across the
+  9 slots as `[1,1,0,1,1,0,1,1,0]`, so walk-in places are scattered through the morning
+  rather than bunched at the end, and the session's opening time is always bookable.
 - **`services` is the single price list.** The public `/prices` page reads it, and the
   future cashier will read the same rows. There is no second price table.
 - **Nothing that a booking points at is ever hard-deleted.** Doctors and services are
@@ -102,6 +108,8 @@ invariant lives in the index.
 
 ## Availability rules
 
+Implemented in `src/lib/availability.ts`; booking itself in `src/lib/booking.ts`.
+
 The booking calendar is always computed, never hand-maintained:
 
 1. Find active `sessions` matching the service's category (and the chosen doctor, for
@@ -114,7 +122,7 @@ The booking calendar is always computed, never hand-maintained:
 6. Return only dates with at least one open slot, so the calendar can grey out full days.
 
 A `session_blackouts` row blocks one date, targeting either one session, or one doctor
-(all their sessions), or — with both null — the whole clinic, for holidays.
+(all their sessions), or, with both null, the whole clinic, for holidays.
 
 ## Non-functional requirements
 
@@ -171,3 +179,41 @@ Environment variables are documented in `.env.example`. Never commit a real one.
   database directly.
 - `/book` is currently a placeholder pointing at the phone number. Milestone 4 replaces
   it wholesale.
+
+## Tests
+
+```
+npm test        # everything; needs a database
+npm run test:unit   # pure functions only, no database
+```
+
+Database tests need `TEST_DATABASE_URL` (or `DATABASE_URL`) pointing at a Postgres with
+migrations applied and **no seed data**. Seeded sessions would otherwise show up in
+availability results, because laboratory and imaging sessions are not scoped to a
+doctor and so every session of that category is a candidate.
+
+```
+createdb veritas_suite
+psql -d veritas_suite -f drizzle/0000_*.sql
+TEST_DATABASE_URL=postgresql://localhost/veritas_suite npm test
+```
+
+Conventions that keep these tests honest:
+
+- **Dates are pinned in the future and `now` is injected**, so nothing depends on when
+  the suite runs.
+- **Each database test file uses its own dates.** A clinic-wide blackout is global by
+  definition, so two files blacking out the same date would sabotage each other. The
+  suite also runs files serially (`--test-concurrency=1`).
+- **Raw-SQL test rows generate unique reference codes and cancel tokens.** Both are
+  globally unique in the schema, so hardcoded values collide with debris from a
+  previously failed run.
+- **The concurrency guarantee is proved, not raced.** `concurrency.db.test.ts` drives
+  two connections by hand so the dangerous interleaving is guaranteed to occur. The
+  "fire N bookings at once" tests in `booking.db.test.ts` are a smoke test on top; on
+  their own they can pass for the wrong reason when the event loop happens to serialise
+  the attempts.
+
+Both guards are independently covered. Removing the `FOR UPDATE` breaks the
+three-places-under-a-stampede test (capacity stops being fully used); dropping
+`bookings_slot_seat_key` breaks the forced-race test (two patients get the same seat).

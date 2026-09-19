@@ -145,6 +145,12 @@ const SERVICE_DOCTORS: Record<string, readonly string[]> = {
 
 const MON = 1, TUE = 2, WED = 3, THU = 4, FRI = 5, SAT = 6;
 
+/**
+ * `capacity` is the number of patients the session can take in total, across all of its
+ * slots, not per slot. `onlineCapacity` is how many of those the booking form may give
+ * away; the rest are held for walk-ins. So Dra. Reyes' 9-to-12 clinic in 20-minute slots
+ * has 9 slots, sees 9 patients, and offers 6 of those places online.
+ */
 type SessionSeed = {
   doctorKey: string | null;
   category: 'consultation' | 'laboratory' | 'imaging';
@@ -166,14 +172,17 @@ const SESSIONS: SessionSeed[] = [
   { doctorKey: 'villanueva', category: 'consultation', days: [WED, SAT], start: '09:00:00', end: '12:00:00', slotMinutes: 30, capacity: 6, onlineCapacity: 4, cutoffHours: 4 },
   { doctorKey: 'lim', category: 'consultation', days: [MON, WED, FRI], start: '14:00:00', end: '17:00:00', slotMinutes: 20, capacity: 9, onlineCapacity: 6, cutoffHours: 2 },
 
-  // Laboratory — extractions run early, cut-off is long because most panels need fasting.
-  { doctorKey: null, category: 'laboratory', days: [MON, TUE, WED, THU, FRI], start: '07:00:00', end: '11:00:00', slotMinutes: 15, capacity: 4, onlineCapacity: 2, cutoffHours: 12 },
-  { doctorKey: null, category: 'laboratory', days: [SAT], start: '07:00:00', end: '10:00:00', slotMinutes: 15, capacity: 4, onlineCapacity: 2, cutoffHours: 12 },
+  // Laboratory. Two phlebotomy chairs, so 2 patients per 15-minute slot: 16 slots over
+  // the morning, 32 places, half of them bookable online. The cut-off is long because
+  // most panels need fasting and patients have to be told the night before.
+  { doctorKey: null, category: 'laboratory', days: [MON, TUE, WED, THU, FRI], start: '07:00:00', end: '11:00:00', slotMinutes: 15, capacity: 32, onlineCapacity: 16, cutoffHours: 12 },
+  { doctorKey: null, category: 'laboratory', days: [SAT], start: '07:00:00', end: '10:00:00', slotMinutes: 15, capacity: 24, onlineCapacity: 12, cutoffHours: 12 },
 
-  // Imaging — one machine, one patient at a time, plus a walk-in seat held back.
-  { doctorKey: null, category: 'imaging', days: [MON, TUE, WED, THU, FRI], start: '08:00:00', end: '12:00:00', slotMinutes: 30, capacity: 2, onlineCapacity: 1, cutoffHours: 6 },
-  { doctorKey: null, category: 'imaging', days: [MON, TUE, WED, THU, FRI], start: '13:00:00', end: '16:00:00', slotMinutes: 30, capacity: 2, onlineCapacity: 1, cutoffHours: 6 },
-  { doctorKey: null, category: 'imaging', days: [SAT], start: '08:00:00', end: '12:00:00', slotMinutes: 30, capacity: 2, onlineCapacity: 1, cutoffHours: 6 },
+  // Imaging. One machine, one patient at a time, so capacity matches the slot count and
+  // a couple of places each session are kept back for walk-ins.
+  { doctorKey: null, category: 'imaging', days: [MON, TUE, WED, THU, FRI], start: '08:00:00', end: '12:00:00', slotMinutes: 30, capacity: 8, onlineCapacity: 6, cutoffHours: 6 },
+  { doctorKey: null, category: 'imaging', days: [MON, TUE, WED, THU, FRI], start: '13:00:00', end: '16:00:00', slotMinutes: 30, capacity: 6, onlineCapacity: 4, cutoffHours: 6 },
+  { doctorKey: null, category: 'imaging', days: [SAT], start: '08:00:00', end: '12:00:00', slotMinutes: 30, capacity: 8, onlineCapacity: 6, cutoffHours: 6 },
 ];
 
 /* -------------------------------------------------------------------------- */

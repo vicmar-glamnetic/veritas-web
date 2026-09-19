@@ -183,8 +183,10 @@ export const serviceDoctors = pgTable(
  * NOTE: this table is the *clinic* sense of "session". Staff login sessions live in
  * `staff_sessions`.
  *
- * `capacity` is the total seats per slot; `onlineCapacity` is how many of those the
- * booking form may give away. The difference is held back for walk-ins.
+ * `capacity` is how many patients the session takes in total, across all of its slots,
+ * NOT per slot. `onlineCapacity` is how many of those places the booking form may give
+ * away; the difference is held back for walk-ins. The availability engine spreads
+ * `onlineCapacity` across the slots, which is what gives each slot its own limit.
  *
  * `dayOfWeek` is 0 = Sunday .. 6 = Saturday, matching both JS `getDay()` and
  * Postgres `extract(dow)`.
@@ -201,7 +203,9 @@ export const sessions = pgTable(
     startTime: time('start_time').notNull(),
     endTime: time('end_time').notNull(),
     slotMinutes: integer('slot_minutes').notNull(),
+    /** Total patients per occurrence of this session, across all slots. */
     capacity: integer('capacity').notNull(),
+    /** How many of `capacity` the booking form may give away. The rest are walk-in. */
     onlineCapacity: integer('online_capacity').notNull(),
     /** A slot closes to online booking this many hours before it starts. */
     bookingCutoffHours: integer('booking_cutoff_hours').notNull().default(2),
