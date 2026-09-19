@@ -60,6 +60,13 @@ export const bookingActor = pgEnum('booking_actor', ['patient', 'staff', 'system
 
 export const staffRole = pgEnum('staff_role', ['admin', 'reception']);
 
+/**
+ * A queue ticket's life. `waiting` is issued but not yet called, `called` is on the
+ * board right now, `done` has been seen. `skipped` is someone who did not answer when
+ * their number came up; the number is never reused either way.
+ */
+export const queueStatus = pgEnum('queue_status', ['waiting', 'called', 'done', 'skipped']);
+
 /** Booking statuses that still consume a seat in a slot. */
 export const OCCUPYING_STATUSES = ['booked', 'arrived', 'no_show'] as const;
 
@@ -445,6 +452,90 @@ export const siteSettings = pgTable(
   (t) => [
     check('site_settings_singleton', sql`${t.id} = 1`),
     check('site_settings_horizon_range', sql`${t.bookingHorizonDays} between 1 and 180`),
+  ],
+);
+
+/* -------------------------------------------------------------------------- */
+/* The queue                                                                  */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * One row per (clinic day, category), holding the last number handed out.
+ *
+ * This exists so a number can be allocated in a single atomic statement:
+ *
+ *   insert into queue_counters (...) values (..., 1)
+ *   on conflict (service_date, category)
+ *   do update set last_number = queue_counters.last_number + 1
+ *   returning last_number
+ *
+ * Postgres takes the row lock for us, so two receptionists pressing Arrived at the same
+ * moment get 14 and 15, never 14 twice. Reading `max(number)` from the tickets table and
+ * adding one is the version of this that looks right and is not: both would read 13.
+ *
+ * The counter never goes backwards. A voided ticket burns its number, which is correct —
+ * a queue number that has been shown to the room must never be handed to someone else.
+ */
+export const queueCounters = pgTable(
+  'queue_counters',
+  {
+    /** Manila calendar date, so numbering restarts by itself each clinic day. */
+    serviceDate: date('service_date', { mode: 'string' }).notNull(),
+    category: serviceCategory('category').notNull(),
+    lastNumber: integer('last_number').notNull().default(0),
+  },
+  (t) => [
+    primaryKey({ columns: [t.serviceDate, t.category] }),
+    check('queue_counters_last_number_non_negative', sql`${t.lastNumber} >= 0`),
+  ],
+);
+
+/**
+ * A place in the queue, created at reception.
+ *
+ * This is the clinic's order of service, and it is deliberately not derived from
+ * anything. The board used to infer "now serving" from whichever booking was most
+ * recently marked arrived, which made it show the last person to walk through the door
+ * rather than the person actually in front of a doctor.
+ *
+ * `bookingId` is null for a walk-in, who has a place in the queue but no appointment.
+ * `patientId` is null when reception has not identified them yet — a number can be
+ * handed out before a name is taken.
+ *
+ * The displayed ticket ("C-014") is never stored. It is rendered from `category` and
+ * `number` by `formatTicket` in src/lib/queue.ts, so ordering and uniqueness stay
+ * numeric and a change of format cannot orphan old rows.
+ */
+export const queueTickets = pgTable(
+  'queue_tickets',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    /** Manila calendar date. Numbers are unique within a day and category, not forever. */
+    serviceDate: date('service_date', { mode: 'string' }).notNull(),
+    category: serviceCategory('category').notNull(),
+    /** 1-based, from queue_counters. Rendered as C-001 / L-001 / I-001. */
+    number: integer('number').notNull(),
+    bookingId: uuid('booking_id').references(() => bookings.id, { onDelete: 'restrict' }),
+    patientId: uuid('patient_id').references(() => patients.id, { onDelete: 'restrict' }),
+    status: queueStatus('status').notNull().default('waiting'),
+    issuedAt: timestamp('issued_at', { withTimezone: true }).notNull().defaultNow(),
+    calledAt: timestamp('called_at', { withTimezone: true }),
+    endedAt: timestamp('ended_at', { withTimezone: true }),
+    issuedByStaffUserId: uuid('issued_by_staff_user_id').references(() => staffUsers.id, {
+      onDelete: 'restrict',
+    }),
+    calledByStaffUserId: uuid('called_by_staff_user_id').references(() => staffUsers.id, {
+      onDelete: 'restrict',
+    }),
+  },
+  (t) => [
+    // The backstop behind queue_counters: even if allocation were got wrong, two
+    // patients can never hold the same number on the same day in the same category.
+    uniqueIndex('queue_tickets_number_key').on(t.serviceDate, t.category, t.number),
+    // One ticket per booking. Nulls are distinct in Postgres, so walk-ins are unaffected.
+    uniqueIndex('queue_tickets_booking_key').on(t.bookingId),
+    index('queue_tickets_board_idx').on(t.serviceDate, t.category, t.status),
+    check('queue_tickets_number_positive', sql`${t.number} > 0`),
   ],
 );
 

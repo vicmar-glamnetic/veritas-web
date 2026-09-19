@@ -3,8 +3,12 @@ import 'server-only';
 import { and, eq, inArray } from 'drizzle-orm';
 
 import { db } from '@/db';
-import { bookingEvents, bookings } from '@/db/schema';
+import { bookingEvents, bookings, services } from '@/db/schema';
 import type { Staff } from '@/lib/auth';
+import { formatTicket, type QueueCategory } from '@/lib/queue';
+import { manilaDateString } from '@/lib/time';
+
+import { issueTicketForBooking } from '../queue-service';
 
 /**
  * Staff-driven status changes.
@@ -27,7 +31,7 @@ const ALLOWED_FROM: Record<StaffStatus, string[]> = {
 };
 
 export type StatusChangeResult =
-  | { ok: true; from: string; to: StaffStatus }
+  | { ok: true; from: string; to: StaffStatus; ticket?: string }
   | { ok: false; reason: 'not_found' | 'not_allowed' };
 
 export async function changeBookingStatus(
@@ -38,11 +42,17 @@ export async function changeBookingStatus(
 ): Promise<StatusChangeResult> {
   return db.transaction(async (tx) => {
     const [current] = await tx
-      .select({ status: bookings.status })
+      .select({
+        status: bookings.status,
+        patientId: bookings.patientId,
+        scheduledStart: bookings.scheduledStart,
+        category: services.category,
+      })
       .from(bookings)
+      .innerJoin(services, eq(services.id, bookings.serviceId))
       .where(eq(bookings.id, bookingId))
       .limit(1)
-      .for('update');
+      .for('update', { of: bookings });
 
     if (!current) return { ok: false, reason: 'not_found' };
     if (current.status === to) return { ok: true, from: current.status, to };
@@ -65,7 +75,28 @@ export async function changeBookingStatus(
       reason: note?.trim() || defaultReason(to, staff),
     });
 
-    return { ok: true, from: current.status, to };
+    /*
+     * Arriving at the desk is what creates a place in the queue — the board shows the
+     * order reception made, not the order people happened to be marked in. It goes in
+     * the same transaction as the status change and the event row, so a ticket can
+     * never exist for a booking that is not arrived, or the other way round.
+     *
+     * The booking's own Manila date is used rather than today's, so marking up a
+     * booking just after midnight cannot file it under the wrong clinic day.
+     */
+    let ticket: string | undefined;
+    if (to === 'arrived') {
+      const issued = await issueTicketForBooking(tx, {
+        bookingId,
+        patientId: current.patientId,
+        serviceDate: manilaDateString(current.scheduledStart),
+        category: current.category as QueueCategory,
+        staffId: staff.id,
+      });
+      ticket = formatTicket(issued.category, issued.number);
+    }
+
+    return { ok: true, from: current.status, to, ticket };
   });
 }
 

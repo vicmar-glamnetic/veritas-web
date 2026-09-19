@@ -3,8 +3,8 @@ import 'server-only';
 import { and, asc, desc, eq, gte, ilike, inArray, lt, or, sql } from 'drizzle-orm';
 
 import { db } from '@/db';
-import { bookings, doctors, patients, services } from '@/db/schema';
-import type { MonitorRow } from '@/lib/monitor';
+import { bookings, doctors, patients, queueTickets, services } from '@/db/schema';
+import { formatTicket, type QueueCategory } from '@/lib/queue';
 import { addDays, manilaDateString, manilaToUtc } from '@/lib/time';
 
 /** One row of the bookings list, flattened for display. */
@@ -22,6 +22,8 @@ export type AdminBooking = {
   serviceCategory: 'consultation' | 'laboratory' | 'imaging';
   prepInstructions: string | null;
   doctorName: string | null;
+  /** The queue number reception issued at check-in, e.g. "C-014". Null until arrived. */
+  ticket: string | null;
 };
 
 const SELECTION = {
@@ -38,6 +40,8 @@ const SELECTION = {
   serviceCategory: services.category,
   prepInstructions: services.prepInstructions,
   doctorName: doctors.fullName,
+  ticketCategory: queueTickets.category,
+  ticketNumber: queueTickets.number,
 };
 
 function baseQuery() {
@@ -46,7 +50,24 @@ function baseQuery() {
     .from(bookings)
     .innerJoin(patients, eq(patients.id, bookings.patientId))
     .innerJoin(services, eq(services.id, bookings.serviceId))
-    .leftJoin(doctors, eq(doctors.id, bookings.doctorId));
+    .leftJoin(doctors, eq(doctors.id, bookings.doctorId))
+    // At most one ticket per booking, enforced by queue_tickets_booking_key, so this
+    // cannot multiply rows.
+    .leftJoin(queueTickets, eq(queueTickets.bookingId, bookings.id));
+}
+
+/** Turns the two ticket columns into the string staff read out, or null. */
+function withTicket<T extends { ticketCategory: unknown; ticketNumber: number | null }>(
+  row: T,
+): Omit<T, 'ticketCategory' | 'ticketNumber'> & { ticket: string | null } {
+  const { ticketCategory, ticketNumber, ...rest } = row;
+  return {
+    ...rest,
+    ticket:
+      ticketCategory && ticketNumber
+        ? formatTicket(ticketCategory as QueueCategory, ticketNumber)
+        : null,
+  };
 }
 
 /**
@@ -60,9 +81,11 @@ export async function getBookingsForDate(date: string): Promise<AdminBooking[]> 
   const from = manilaToUtc(date, '00:00');
   const to = manilaToUtc(addDays(date, 1), '00:00');
 
-  return baseQuery()
+  const rows = await baseQuery()
     .where(and(gte(bookings.scheduledStart, from), lt(bookings.scheduledStart, to)))
     .orderBy(asc(bookings.scheduledStart), asc(bookings.slotIndex));
+
+  return rows.map(withTicket);
 }
 
 export type BookingFilters = {
@@ -106,10 +129,12 @@ export async function findBookings(filters: BookingFilters, limit = 200): Promis
     }
   }
 
-  return baseQuery()
+  const rows = await baseQuery()
     .where(conditions.length ? and(...conditions) : undefined)
     .orderBy(desc(bookings.scheduledStart))
     .limit(limit);
+
+  return rows.map(withTicket);
 }
 
 /** Counts for the Today screen's summary line. */
@@ -150,46 +175,8 @@ export async function getBookingsAffectedByBlackout(
   if (target.sessionId) conditions.push(eq(bookings.sessionId, target.sessionId));
   if (target.doctorId) conditions.push(eq(bookings.doctorId, target.doctorId));
 
-  return baseQuery().where(and(...conditions)).orderBy(asc(bookings.scheduledStart));
+  const rows = await baseQuery().where(and(...conditions)).orderBy(asc(bookings.scheduledStart));
+  return rows.map(withTicket);
 }
 
 export const todayInManila = () => manilaDateString();
-
-/**
- * Today's bookings, trimmed to what a screen in a public waiting room may show.
- *
- * This does its own select rather than reusing `baseQuery()` on purpose: that one
- * carries a mobile number, an email address and the patient's note, none of which
- * should travel to a display hanging in a waiting room, even inside props that nobody
- * renders. Minimum necessary, per the Data Privacy Act.
- *
- * Cancelled and no-show bookings are excluded — a board is about who is still here.
- */
-export async function getMonitorRows(date: string): Promise<MonitorRow[]> {
-  const from = manilaToUtc(date, '00:00');
-  const to = manilaToUtc(addDays(date, 1), '00:00');
-
-  return db
-    .select({
-      id: bookings.id,
-      referenceCode: bookings.referenceCode,
-      status: bookings.status,
-      scheduledStart: bookings.scheduledStart,
-      updatedAt: bookings.updatedAt,
-      patientName: patients.fullName,
-      serviceCategory: services.category,
-      doctorName: doctors.fullName,
-    })
-    .from(bookings)
-    .innerJoin(patients, eq(patients.id, bookings.patientId))
-    .innerJoin(services, eq(services.id, bookings.serviceId))
-    .leftJoin(doctors, eq(doctors.id, bookings.doctorId))
-    .where(
-      and(
-        gte(bookings.scheduledStart, from),
-        lt(bookings.scheduledStart, to),
-        inArray(bookings.status, ['booked', 'arrived']),
-      ),
-    )
-    .orderBy(asc(bookings.scheduledStart));
-}

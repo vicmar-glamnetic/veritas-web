@@ -6,6 +6,8 @@ import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 
 import { formatManilaTime } from '@/lib/time';
 
+import { callNext, issueWalkIn, recall } from './actions';
+
 /**
  * The waiting-room board.
  *
@@ -28,12 +30,13 @@ const VOICE_KEY = 'veritas-monitor-voice';
 type Panel = {
   key: string;
   label: string;
-  serving: { referenceCode: string; name: string; detail: string } | null;
+  /** A walk-in may have no name yet; the number is what the room is waiting for. */
+  serving: { ticket: string; name: string | null; detail: string | null } | null;
   waitingCount: number;
-  next: { referenceCode: string; time: string }[];
+  next: { ticket: string; name: string | null }[];
 };
 
-type Announcement = { referenceCode: string; name: string; categoryLabel: string };
+type Announcement = { ticket: string; name: string | null; categoryLabel: string };
 
 /**
  * Three categories, three colours already in the palette, so the board looks like the
@@ -102,12 +105,15 @@ export function MonitorBoard({
   initialTime,
   panels,
   announcement,
+  showControls,
 }: {
   clinicName: string;
   dateLabel: string;
   initialTime: string;
   panels: Panel[];
   announcement: Announcement | null;
+  /** False on the wall screen (`?display=1`), which has nobody to press anything. */
+  showControls: boolean;
 }) {
   const router = useRouter();
   const [clock, setClock] = useState(initialTime);
@@ -133,7 +139,7 @@ export function MonitorBoard({
   const previous = useRef<Record<string, string | null> | null>(null);
   useEffect(() => {
     const current: Record<string, string | null> = {};
-    for (const panel of panels) current[panel.key] = panel.serving?.referenceCode ?? null;
+    for (const panel of panels) current[panel.key] = panel.serving?.ticket ?? null;
 
     const before = previous.current;
     previous.current = current;
@@ -159,7 +165,7 @@ export function MonitorBoard({
    */
   const lastAnnounced = useRef<string | null | undefined>(undefined);
   useEffect(() => {
-    const code = announcement?.referenceCode ?? null;
+    const code = announcement?.ticket ?? null;
     const previousCode = lastAnnounced.current;
     lastAnnounced.current = code;
 
@@ -238,11 +244,16 @@ export function MonitorBoard({
                           isFlashing ? 'opacity-25' : 'opacity-100'
                         }`}
                       >
-                        {panel.serving.referenceCode}
+                        {panel.serving.ticket}
                       </p>
-                      <p className="mt-2 text-[clamp(0.875rem,1.6vw,1.25rem)] text-ink-700">
+                      <p className="mt-2 min-h-[1.5em] text-[clamp(0.875rem,1.6vw,1.25rem)] text-ink-700">
                         {panel.serving.name}
-                        <span className="text-ink-500"> · {panel.serving.detail}</span>
+                        {panel.serving.detail && (
+                          <span className="text-ink-500">
+                            {panel.serving.name ? ' · ' : ''}
+                            {panel.serving.detail}
+                          </span>
+                        )}
                       </p>
                     </>
                   ) : (
@@ -275,13 +286,11 @@ export function MonitorBoard({
                     <ul className="mt-[clamp(0.5rem,0.9vw,0.75rem)] space-y-[clamp(0.25rem,0.6vw,0.5rem)]">
                       {panel.next.map((item) => (
                         <li
-                          key={item.referenceCode}
+                          key={item.ticket}
                           className="flex items-baseline justify-between gap-3 text-[clamp(0.8125rem,1.15vw,1.0625rem)]"
                         >
-                          <span className="font-mono text-ink-700 tabular-nums">
-                            {item.referenceCode}
-                          </span>
-                          <span className="text-ink-500 tabular-nums">{item.time}</span>
+                          <span className="font-mono text-ink-700 tabular-nums">{item.ticket}</span>
+                          {item.name && <span className="text-ink-500">{item.name}</span>}
                         </li>
                       ))}
                     </ul>
@@ -304,10 +313,11 @@ export function MonitorBoard({
         {announcement ? (
           <span>
             <span className="font-mono font-semibold text-white tabular-nums">
-              {announcement.referenceCode}
+              {announcement.ticket}
             </span>
             {' — '}
-            {announcement.name}, please proceed to {announcement.categoryLabel}.
+            {announcement.name ? `${announcement.name}, ` : ''}please proceed to{' '}
+            {announcement.categoryLabel}.
           </span>
         ) : (
           <span>
@@ -316,33 +326,101 @@ export function MonitorBoard({
         )}
       </p>
 
-      <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-brand-700 pt-3 text-brand-300">
-        <p className="mr-auto text-xs">
-          Updates on its own. Marking a patient Arrived on the Today screen moves them onto this
-          board.
-        </p>
-        {canSpeak && (
-          <button
-            type="button"
-            onClick={toggleVoice}
-            aria-pressed={voice}
-            className={`rounded border px-3 py-1.5 text-xs font-medium ${
-              voice
-                ? 'border-brand-400 bg-brand-600 text-white'
-                : 'border-brand-700 text-brand-100 hover:bg-brand-800'
-            }`}
-          >
-            Voice: {voice ? 'on' : 'off'}
-          </button>
-        )}
-        <FullscreenButton />
-        <Link
-          href="/admin"
-          className="rounded border border-brand-700 px-3 py-1.5 text-xs font-medium text-brand-100 hover:bg-brand-800"
-        >
-          Back to admin
-        </Link>
-      </div>
+      {showControls && (
+        <div className="mt-3 border-t border-brand-700 pt-3">
+          {/*
+            * The desk drives the board. Nothing advances on its own: a number moves when
+            * a room is free and somebody says so, which is the whole point of a queue.
+            *
+            * Plain form posts, so every button works with JavaScript off.
+            */}
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+            <span className="text-xs font-semibold tracking-[0.14em] text-brand-300 uppercase">
+              Call next
+            </span>
+            {panels.map((panel) => (
+              <form key={panel.key} action={callNext}>
+                <input type="hidden" name="category" value={panel.key} />
+                {/* Labelled in full: the visible text alone gives three buttons called
+                    "Consultation" on this bar, and a screen reader cannot tell the call
+                    button from the undo one. */}
+                <button
+                  type="submit"
+                  disabled={panel.waitingCount === 0}
+                  aria-label={`Call the next ${panel.label} number, ${panel.waitingCount} waiting`}
+                  className="rounded border border-brand-400 bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-500 disabled:cursor-not-allowed disabled:border-brand-700 disabled:bg-transparent disabled:text-brand-300"
+                >
+                  {panel.label}{' '}
+                  <span className="font-normal tabular-nums">({panel.waitingCount})</span>
+                </button>
+              </form>
+            ))}
+          </div>
+
+          <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-brand-300">
+            <span className="text-xs">Walk-in number</span>
+            {panels.map((panel) => (
+              <form key={panel.key} action={issueWalkIn}>
+                <input type="hidden" name="category" value={panel.key} />
+                <button
+                  type="submit"
+                  aria-label={`Issue a walk-in ${panel.label} number`}
+                  className="rounded border border-brand-700 px-3 py-1.5 text-xs font-medium text-brand-100 hover:bg-brand-800"
+                >
+                  + {panel.label}
+                </button>
+              </form>
+            ))}
+
+            <span className="ml-2 text-xs">Undo a call</span>
+            {panels.map((panel) => (
+              <form key={panel.key} action={recall}>
+                <input type="hidden" name="category" value={panel.key} />
+                <button
+                  type="submit"
+                  disabled={!panel.serving}
+                  aria-label={`Undo the last ${panel.label} call`}
+                  className="rounded px-2 py-1.5 text-xs text-brand-200 underline underline-offset-4 hover:text-white disabled:cursor-not-allowed disabled:text-brand-300/40 disabled:no-underline"
+                >
+                  {panel.label}
+                </button>
+              </form>
+            ))}
+
+            <div className="ml-auto flex flex-wrap items-center gap-2">
+              {canSpeak && (
+                <button
+                  type="button"
+                  onClick={toggleVoice}
+                  aria-pressed={voice}
+                  className={`rounded border px-3 py-1.5 text-xs font-medium ${
+                    voice
+                      ? 'border-brand-400 bg-brand-600 text-white'
+                      : 'border-brand-700 text-brand-100 hover:bg-brand-800'
+                  }`}
+                >
+                  Voice: {voice ? 'on' : 'off'}
+                </button>
+              )}
+              <FullscreenButton />
+              <Link
+                href="/admin"
+                className="rounded border border-brand-700 px-3 py-1.5 text-xs font-medium text-brand-100 hover:bg-brand-800"
+              >
+                Back to admin
+              </Link>
+            </div>
+          </div>
+
+          <p className="mt-3 text-xs text-brand-300">
+            Numbers are handed out at reception when a patient is marked Arrived. Open{' '}
+            <Link href="/admin/monitor?display=1" className="underline underline-offset-4">
+              the wall version
+            </Link>{' '}
+            on the screen the patients see — it has none of these controls.
+          </p>
+        </div>
+      )}
 
       {/*
        * With JavaScript off there is no router.refresh(), so the board would freeze at

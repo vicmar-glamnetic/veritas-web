@@ -32,10 +32,42 @@ const DEMO_MOBILE_PREFIX = '+63917555099';
  */
 const DEMO_EMAIL = 'delivered@resend.dev';
 
+// Tickets point at bookings with on delete restrict, so they go first.
+await pool.query(
+  `delete from queue_tickets t using bookings b, patients p
+    where t.booking_id = b.id and b.patient_id = p.id and p.email = $1`,
+  [DEMO_EMAIL],
+);
 const previous = await pool.query(
   `delete from bookings b using patients p
     where p.id = b.patient_id and p.email = $1`,
   [DEMO_EMAIL],
+);
+
+/*
+ * Walk-in numbers pressed on the board during a demo or a test run. They have no
+ * booking and no patient behind them, which is the one thing only the demo walk-in
+ * button produces — a genuine walk-in gets a name taken at the desk.
+ */
+await pool.query(
+  `delete from queue_tickets
+    where service_date = $1 and booking_id is null and patient_id is null`,
+  [today],
+);
+
+/*
+ * Wind the counter back to whatever tickets actually survive, so a demo starts at C-001
+ * rather than at whatever number yesterday's run happened to reach. It is set to the
+ * real maximum rather than to zero: a number that has already been shown to a waiting
+ * room must never be handed out twice, so any ticket left standing still holds its place.
+ */
+await pool.query(
+  `update queue_counters c
+      set last_number = coalesce(
+        (select max(t.number) from queue_tickets t
+          where t.service_date = c.service_date and t.category = c.category), 0)
+    where c.service_date = $1`,
+  [today],
 );
 await pool.query(
   `delete from patients p where p.email = $1
@@ -170,16 +202,42 @@ for (const [c, group] of CATEGORIES.entries()) {
   }
 
   /*
-   * One already through the door in each category, so the Today progress bar is not at
-   * zero and every panel of the waiting-room board has a number on it.
+   * Two already through the door in each category, checked in at reception in order, so
+   * the waiting-room board has a number on it and somebody behind them in the queue.
    *
-   * `updated_at` is bumped deliberately: the board reads "now serving" as the arrived
-   * booking with the most recent update, and leaving it at the insert default would make
-   * the choice between categories depend on row order.
+   * This mirrors what the Arrived button does: set the status, then take the next queue
+   * number for the day and category. The counter is used rather than a literal, so the
+   * numbering is the real thing and re-running the script does not reuse a number.
    */
+  for (const reference of first.slice(0, 2)) {
+    await pool.query(
+      `update bookings set status = 'arrived', updated_at = now() where reference_code = $1`,
+      [reference],
+    );
+
+    const { rows } = await pool.query(
+      `insert into queue_counters (service_date, category, last_number)
+       values ($1, $2, 1)
+       on conflict (service_date, category)
+       do update set last_number = queue_counters.last_number + 1
+       returning last_number`,
+      [today, group.category],
+    );
+
+    await pool.query(
+      `insert into queue_tickets (service_date, category, number, booking_id, patient_id)
+       select $1, $2, $3, b.id, b.patient_id from bookings b where b.reference_code = $4`,
+      [today, group.category, rows[0].last_number, reference],
+    );
+  }
+
+  // The first of them is on the board; the second is next up.
   await pool.query(
-    `update bookings set status = 'arrived', updated_at = now() where reference_code = $1`,
-    [first[0]],
+    `update queue_tickets set status = 'called', called_at = now()
+      where service_date = $1 and category = $2 and number = (
+        select min(number) from queue_tickets where service_date = $1 and category = $2
+      )`,
+    [today, group.category],
   );
 }
 
@@ -191,5 +249,6 @@ if (created.length === 0) {
 
 console.log(`Added ${created.length} bookings to ${today}:`);
 for (const line of created) console.log(`  ${line}`);
-console.log('\nOne per category is marked arrived, so /admin/monitor has something to show.');
+console.log('\nTwo per category are checked in and the first of each is called,');
+console.log('so /admin/monitor shows C-001, L-001 and I-001 with somebody behind them.');
 await pool.end();

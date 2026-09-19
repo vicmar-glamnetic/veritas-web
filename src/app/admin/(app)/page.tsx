@@ -169,6 +169,7 @@ async function loadDay(date: string, isToday: boolean) {
     .map((b) => ({
       id: b.id,
       referenceCode: b.referenceCode,
+      ticket: b.ticket,
       status: b.status,
       time: formatManilaTime(b.scheduledStart),
       patientName: b.patientName,

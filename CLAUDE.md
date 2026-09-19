@@ -161,9 +161,11 @@ Do not build these. If one seems necessary, say so and wait.
 Online payment · SMS · patient login · rescheduling (cancel and rebook only) · results
 viewing · billing · laboratory or imaging modules.
 
-Queue display was on this list until the client asked for one. What exists is a
-read-only board (see below), not a queueing system: nothing calls, numbers, defers or
-reorders a patient. That still belongs to a later phase.
+Queue display and queue numbering were on this list until the client asked for them.
+What exists now is described under "The queue and the waiting room board": reception
+issues numbers, staff call them, the board shows them. Still not built, and still a later
+phase: per-room queues, printed tickets, skip-and-recall policy, and any reporting on
+waiting times.
 
 ## Commands
 
@@ -262,39 +264,55 @@ the page guard alone secures nothing.
   `(app)/ui.tsx` nests the control inside the `<label>`; do not reintroduce ids for
   labelling. The trade is that a `hint` becomes part of the accessible name.
 
-## The waiting room board
+## The queue and the waiting room board
 
-`/admin/monitor` is the screen that faces the patients. It sits outside the `(app)`
-route group so it gets the whole display with no admin chrome, and repeats
-`requireStaff()` in its own layout, because the `(app)` guard does not reach it. A staff
-member signs the screen in when the clinic opens and the session cookie carries the day.
+The clinic's order of service lives in `queue_tickets`, created at reception. It is not
+derived from anything, and that is the point: the board's first version inferred "now
+serving" from whichever booking was most recently marked arrived, which showed the last
+person through the door rather than the person in front of a doctor, and labelled them
+with a booking reference that carries no order.
 
-- **There is no "now serving" status, and none was added.** `arrived` is written the
-  moment the desk taps Arrived on Today, so the arrived booking with the latest
-  `updated_at` is the last patient the desk moved along. The board derives from that.
-  Inventing a parallel queue would mean a second thing for staff to keep in step, and
-  they would not.
-- **A public wall gets the minimum.** The reference code is the patient's own public
-  identifier and means nothing to the rest of the room; `shortenName` cuts the name to
-  "Corazon A.". No surname, no mobile, no email, and **no service name** — "Chest X-ray"
-  beside a name is a diagnosis hint. `getMonitorRows` selects those columns and no
-  others, so they cannot reach the page even inside an unrendered prop.
-- The second line is the doctor for a consultation and the appointment time otherwise,
-  because laboratory and imaging sessions have no doctor.
-- **The panels size to their content and the row is centred.** Stretching a grid down a
-  1080p screen left each panel two thirds empty and put the three rules at three
-  different heights, because the queues are different lengths.
+- **Reception creates the order.** Marking a patient Arrived on Today takes the next
+  number for that day and category, in the same transaction as the status change and the
+  `booking_events` row. A ticket can never exist for a booking that is not arrived.
+  `issueWalkInTicket` does the same for somebody with no appointment.
+- **`C-014`, `L-003`, `I-007`.** Rendered by `formatTicket` from the category and the
+  number, never stored, so ordering and uniqueness stay numeric and changing the format
+  cannot orphan old rows. Padded to three digits and allowed to grow past them.
+- **Numbers are allocated by `queue_counters`, not by `max(number) + 1`.** One
+  `insert ... on conflict do update ... returning` statement; Postgres holds the row, so
+  two receptionists in the same second get 14 and 15. `max(number) + 1` is the version
+  that looks right and is not — both readers see 13. The unique index on
+  `(service_date, category, number)` is the backstop, not the mechanism. Removing the
+  counter breaks the stampede test in `queue.db.test.ts`; both are proved there.
+- **Numbering restarts each Manila day** because it is scoped to `service_date`. No job
+  resets anything. A number is never reused within a day, even if its ticket is voided —
+  a number shown to a waiting room must not be handed to somebody else.
+- **Nothing advances on its own.** Staff press Call next, which finishes whoever is on
+  the board and promotes the lowest waiting number. The allowed-from status is re-checked
+  in the UPDATE's WHERE clause, as booking status changes are, so two rooms pressing at
+  once cannot be handed the same patient. Undo a call puts the number back at the front.
+- **`/admin/monitor` has the controls; `/admin/monitor?display=1` does not.** The wall
+  screen shows numbers and nothing pressable. Both are behind `requireStaff()`, repeated
+  in the route's own layout because the `(app)` guard does not reach it.
+- **A public wall gets the minimum.** `shortenName` cuts the name to "Corazon A."; a
+  walk-in with no name shows the number alone. No surname, no mobile, no email and **no
+  service name** — "Chest X-ray" beside a name is a diagnosis hint. `getQueueTickets`
+  selects those columns and no others, so the rest cannot reach the page even inside an
+  unrendered prop.
+- **The controls are labelled with `aria-label`, not by their text.** The bar carries
+  three buttons reading "Consultation": call, walk-in and undo.
 - Refreshing is `router.refresh()` every 15 seconds, so the board repaints without the
   page flashing white in front of the room. With JavaScript off it falls back to a meta
-  refresh that is deliberately written with `dangerouslySetInnerHTML` inside `<noscript>`
-  — React 19 hoists a bare `<meta>` into `<head>`, where it would reload the page for
-  everyone.
-- Voice announcement is off by default and remembered per screen in `localStorage`. It
-  announces a change, never the call that was already on screen when the page loaded,
-  or every refresh would shout at the room.
-- `npm run db:demo-today` fills all three categories and marks one arrived in each, so
-  the board has something to show. It falls back to any active session when none runs
-  today, because the clinic is shut on a Sunday and a Sunday is when someone demos it.
+  refresh written with `dangerouslySetInnerHTML` inside `<noscript>` — React 19 hoists a
+  bare `<meta>` into `<head>`, where it would reload the page for everyone. The buttons
+  are plain form posts and work with JavaScript off too.
+- Voice announcement is off by default, remembered per screen, and announces a change
+  only — never the call already on screen when the page loaded.
+- `npm run db:demo-today` checks two patients in per category and calls the first of
+  each, then winds `queue_counters` back to the tickets that survive, so a demo starts at
+  C-001 every time. It clears walk-in tickets that have no booking and no patient, which
+  only the demo walk-in button produces.
 
 ## Layouts
 

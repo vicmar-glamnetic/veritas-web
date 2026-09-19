@@ -41,6 +41,11 @@ export function BookingRow({ booking, showDate }: { booking: AdminBooking; showD
             </a>
             <span className="mx-2 text-line-strong">|</span>
             <span className="font-mono text-xs tracking-wider">{booking.referenceCode}</span>
+            {booking.ticket ? (
+              <span className="ml-2 rounded bg-brand-700 px-1.5 py-0.5 font-mono text-xs font-semibold tracking-wider text-white">
+                {booking.ticket}
+              </span>
+            ) : null}
             {showDate ? <span className="ml-2 text-ink-400">{showDate}</span> : null}
           </p>
 

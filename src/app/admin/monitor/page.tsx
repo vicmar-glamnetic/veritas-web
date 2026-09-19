@@ -1,5 +1,7 @@
-import { getMonitorRows, todayInManila } from '@/lib/admin/queries';
-import { buildBoard, shortenName } from '@/lib/monitor';
+import { db } from '@/db';
+import { getQueueTickets } from '@/lib/queue-service';
+import { todayInManila } from '@/lib/admin/queries';
+import { buildQueueBoard, formatTicket, shortenName } from '@/lib/queue';
 import { getSiteSettings } from '@/lib/queries';
 import { formatManilaDate, formatManilaTime } from '@/lib/time';
 
@@ -11,13 +13,19 @@ import { MonitorBoard } from './board';
  * Everything is shaped and formatted here, on the server, so the board component never
  * touches a Date, a timezone or the database. The page is always fresh: a board that
  * served a cached answer would call a patient who was seen twenty minutes ago.
+ *
+ * `?display=1` hides the staff controls, for the screen that actually hangs on the wall.
  */
 export const dynamic = 'force-dynamic';
 
-export default async function MonitorPage() {
-  const date = todayInManila();
-  const [settings, rows] = await Promise.all([getSiteSettings(), getMonitorRows(date)]);
-  const board = buildBoard(rows);
+export default async function MonitorPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ display?: string }>;
+}) {
+  const [{ display }, date] = await Promise.all([searchParams, todayInManila()]);
+  const [settings, tickets] = await Promise.all([getSiteSettings(), getQueueTickets(db, date)]);
+  const board = buildQueueBoard(tickets);
   const now = new Date();
 
   const panels = board.panels.map((panel) => ({
@@ -25,18 +33,16 @@ export default async function MonitorPage() {
     label: panel.label,
     serving: panel.serving
       ? {
-          referenceCode: panel.serving.referenceCode,
-          name: shortenName(panel.serving.patientName),
-          // The doctor is the useful second line for a consultation; for laboratory and
-          // imaging there is no doctor, and the appointment time tells the room what it
-          // needs. Naming the service would put a diagnosis hint on a public wall.
-          detail: panel.serving.doctorName ?? formatManilaTime(panel.serving.scheduledStart),
+          ticket: formatTicket(panel.serving.category, panel.serving.number),
+          // A walk-in may have no name yet, and the number is the point regardless.
+          name: panel.serving.patientName ? shortenName(panel.serving.patientName) : null,
+          detail: panel.serving.doctorName,
         }
       : null,
     waitingCount: panel.waiting.length,
-    next: panel.waiting.slice(0, 4).map((row) => ({
-      referenceCode: row.referenceCode,
-      time: formatManilaTime(row.scheduledStart),
+    next: panel.waiting.slice(0, 4).map((ticket) => ({
+      ticket: formatTicket(ticket.category, ticket.number),
+      name: ticket.patientName ? shortenName(ticket.patientName) : null,
     })),
   }));
 
@@ -46,11 +52,14 @@ export default async function MonitorPage() {
       dateLabel={formatManilaDate(now)}
       initialTime={formatManilaTime(now)}
       panels={panels}
+      showControls={display !== '1'}
       announcement={
         board.lastCalled
           ? {
-              referenceCode: board.lastCalled.row.referenceCode,
-              name: shortenName(board.lastCalled.row.patientName),
+              ticket: formatTicket(board.lastCalled.category, board.lastCalled.number),
+              name: board.lastCalled.patientName
+                ? shortenName(board.lastCalled.patientName)
+                : null,
               categoryLabel:
                 board.panels.find((p) => p.key === board.lastCalled!.category)?.label ?? '',
             }

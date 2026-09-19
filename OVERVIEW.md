@@ -56,9 +56,9 @@ asking the clinic.
 Online payment · SMS · patient login · rescheduling (cancel and rebook only) · results
 viewing · billing · laboratory or imaging modules.
 
-Queue display was on that list until the client asked for one. What was built is a
-read-only board (§10), not a queueing system: nothing calls, numbers, defers or reorders
-a patient. That remains a later phase.
+Queue display and queue numbering were on that list until the client asked for them.
+Both are now built (§10). Still out of scope: per-room queues, printed tickets, a
+skip-and-recall policy, and reporting on waiting times.
 
 ---
 
@@ -425,36 +425,48 @@ accident.
 | **Promos** | any | Add with start and end dates; they appear and disappear by themselves. |
 | **Settings** | admin | Clinic details, opening hours, booking horizon. |
 | **Staff users** | admin | Accounts and roles. |
-| **Waiting room screen** | any | `/admin/monitor` — the board that faces the patients. Opens in its own tab. |
+| **Waiting room screen** | any | `/admin/monitor` — the queue board, with Call next / walk-in / undo. `?display=1` is the wall version with no controls. Opens in its own tab. |
 
 Reception accounts do not see Settings or Staff users in the navigation and are
 redirected away if they type the URL.
 
-### The waiting room board
+### The queue and the waiting room board
 
-`/admin/monitor` is a full-screen board for a television in the waiting room: one panel
-each for consultation, laboratory and imaging, showing who is being seen and who is
-next. It sits outside the `(app)` route group so it gets the whole display with no admin
-chrome, and repeats `requireStaff()` in its own layout, because the `(app)` guard does
-not reach it.
+The clinic's order of service is `queue_tickets`, created at reception. It is not derived
+from anything: the board's first version inferred "now serving" from whichever booking
+was most recently marked arrived, which showed the last person through the door rather
+than the person in front of a doctor.
 
-**It adds no status and no new staff step.** `arrived` is written the moment the desk
-taps Arrived on Today, so the arrived booking with the latest `updated_at` is the last
-patient the desk moved along, and the board derives from that. A parallel queue would be
-a second thing to keep in step, and it would drift.
+**Reception creates the order.** Marking a patient Arrived takes the next number for that
+day and category, in the same transaction as the status change and the audit row. A
+walk-in with no appointment gets a number the same way.
 
-**What a public wall is allowed to show.** The reference code — the patient's own public
-identifier, already in their confirmation email, meaningless to the rest of the room —
-and a name cut to "Corazon A." by `shortenName`. No surname, no mobile, no email, and no
-service name, because "Chest X-ray" beside a name is a diagnosis hint. `getMonitorRows`
-selects those columns and no others, so the rest cannot reach the page even inside a
-prop that nothing renders. The second line is the doctor for a consultation and the
-appointment time otherwise, since laboratory and imaging sessions have no doctor.
+**Numbers read `C-014`, `L-003`, `I-007`** — rendered from the category and the number by
+`formatTicket`, never stored, so ordering stays numeric. They restart each Manila day
+because they are scoped to `service_date`, and no job resets anything.
 
-It refreshes itself every 15 seconds with `router.refresh()`, so it repaints without the
-page flashing white in front of the room, and falls back to a meta refresh with
-JavaScript off. Voice announcement is off by default, remembered per screen, and
-announces only a change — never the call already on screen when the page loaded.
+**Allocation is a counter row, not `max(number) + 1`.** One
+`insert ... on conflict do update ... returning` against `queue_counters`; Postgres holds
+the row, so two receptionists in the same second get 14 and 15 rather than 14 twice. The
+unique index on `(service_date, category, number)` is the backstop. `queue.db.test.ts`
+proves both, and replacing the counter with `max(number) + 1` makes its stampede test
+fail.
+
+**Nothing advances on its own.** Staff press Call next; it finishes whoever is on the
+board and promotes the lowest waiting number, re-checking the status in the UPDATE's
+WHERE clause so two rooms cannot be handed the same patient. Undo puts a number back.
+
+`/admin/monitor` carries the controls. `/admin/monitor?display=1` is the same board with
+nothing pressable, for the screen the patients see. Both require staff.
+
+**What a public wall may show:** the number, and a name cut to "Corazon A." by
+`shortenName` — a walk-in with no name shows the number alone. No surname, no mobile, no
+email, no service name, because "Chest X-ray" beside a name is a diagnosis hint.
+`getQueueTickets` selects those columns and no others.
+
+It refreshes every 15 seconds with `router.refresh()`, and the buttons are plain form
+posts, so the whole screen works with JavaScript off. Voice announcement is off by
+default and announces only a change.
 
 ### Status changes
 
@@ -608,8 +620,8 @@ performs an action, it must look tappable.
 ### Done
 
 Schema and migrations · availability engine · booking flow · confirmation email · lookup
-and cancellation · staff authentication · Today screen · all admin screens · waiting
-room board · deployed to Vercel.
+and cancellation · staff authentication · Today screen · all admin screens · queue
+numbering and the waiting room board · deployed to Vercel.
 
 ### Placeholder — must be replaced before launch
 

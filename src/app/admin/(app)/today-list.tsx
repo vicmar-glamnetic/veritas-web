@@ -16,6 +16,8 @@ import { setBookingStatus } from './actions';
 export type TodayBooking = {
   id: string;
   referenceCode: string;
+  /** The queue number issued at check-in, e.g. "C-014". Null until marked arrived. */
+  ticket: string | null;
   status: string;
   time: string;
   patientName: string;
@@ -48,6 +50,7 @@ export function TodayList({
       (b) =>
         b.patientName.toLowerCase().includes(term) ||
         b.referenceCode.toLowerCase().includes(term) ||
+        (b.ticket?.toLowerCase().includes(term) ?? false) ||
         b.serviceName.toLowerCase().includes(term) ||
         (digits.length >= 3 && b.mobileDisplay.replace(/\D/g, '').includes(digits)),
     );
@@ -128,6 +131,13 @@ function Row({
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
             <span className="font-serif text-lg text-ink-900 tabular-nums">{b.time}</span>
+            {/* The queue number, loud, because it is what reception reads out to the
+                patient the moment they are checked in. */}
+            {b.ticket ? (
+              <span className="mr-2 rounded bg-brand-700 px-2 py-0.5 font-mono text-xs font-semibold tracking-wider text-white">
+                {b.ticket}
+              </span>
+            ) : null}
             <span className="font-semibold text-ink-900">{b.patientName}</span>
             <StatusBadge status={b.status} />
             {isNextUp ? (
