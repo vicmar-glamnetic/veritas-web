@@ -74,13 +74,13 @@ export function Calendar({
         </span>
       </p>
 
-      <div className="space-y-7">
+      <div className="grid gap-x-10 gap-y-8 lg:grid-cols-2">
         {[...months.entries()].map(([key, monthDates]) => {
           const first = monthDates[0]!;
           const leading = dayOfWeekForDate(first);
 
           return (
-            <table key={key} className="w-full max-w-lg border-collapse">
+            <table key={key} className="w-full max-w-md table-fixed border-collapse">
               <caption className="pb-3 text-left font-serif text-lg text-ink-900">
                 {monthLabel(first)}
               </caption>
@@ -116,7 +116,7 @@ export function Calendar({
                               href={hrefFor(date)}
                               aria-current={isSelected ? 'date' : undefined}
                               aria-label={`${longDate(date)}, ${openCount} ${openCount === 1 ? 'time' : 'times'} available`}
-                              className={`flex aspect-square w-full flex-col items-center justify-center rounded border transition-colors ${
+                              className={`flex min-h-[4.25rem] w-full flex-col items-center justify-center rounded border px-0.5 py-1.5 text-center transition-colors ${
                                 isSelected
                                   ? 'border-brand-700 bg-brand-700 text-white'
                                   : 'border-brand-300 bg-surface text-brand-800 hover:border-brand-600 hover:bg-brand-50 active:bg-brand-100'
@@ -126,18 +126,21 @@ export function Calendar({
                                 {dayNumber}
                               </span>
                               <span
-                                className={`mt-1 text-[0.65rem] leading-none ${
+                                className={`mt-1 text-[0.625rem] leading-[1.15] ${
                                   isSelected ? 'text-brand-100' : 'text-brand-600'
                                 }`}
                               >
                                 {openCount}
+                                {/* Spelled out where there is room; a phone gets the short form. */}
+                                <span className="hidden sm:inline"> slots available</span>
+                                <span className="sm:hidden"> left</span>
                               </span>
                               {isToday ? <span className="sr-only">(today)</span> : null}
                             </Link>
                           ) : (
                             <span
                               aria-label={`${longDate(date)}, nothing available`}
-                              className={`flex aspect-square w-full items-center justify-center rounded bg-surface-sunken text-sm tabular-nums ${
+                              className={`flex min-h-[4.25rem] w-full items-center justify-center rounded bg-surface-sunken text-sm tabular-nums ${
                                 isToday ? 'font-semibold text-ink-500 ring-1 ring-line-strong' : 'text-ink-400'
                               }`}
                             >
@@ -160,9 +163,6 @@ export function Calendar({
         })}
       </div>
 
-      <p className="mt-4 text-sm text-ink-500">
-        The small number is how many times are still free that day.
-      </p>
     </div>
   );
 }
