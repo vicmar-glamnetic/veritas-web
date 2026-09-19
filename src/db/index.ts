@@ -1,24 +1,19 @@
-import { neon } from '@neondatabase/serverless';
-import { drizzle } from 'drizzle-orm/neon-http';
-
+import { createDb, type Db } from './client';
 import * as schema from './schema';
 
-const connectionString = process.env.DATABASE_URL;
-
-if (!connectionString) {
-  throw new Error('DATABASE_URL is not set. Copy .env.example to .env.local and fill it in.');
-}
-
 /**
- * HTTP-based Neon client. Fine for reads and single-statement writes, which is
- * almost everything here.
+ * The app's database handle.
  *
- * Note: neon-http cannot run interactive transactions. The booking insert relies on
- * the partial unique index `bookings_slot_seat_key` for its concurrency guarantee
- * rather than a transaction with a row lock, which is why that index exists. If a
- * future feature genuinely needs a multi-statement transaction, add a pooled
- * `drizzle-orm/neon-serverless` client alongside this one.
+ * Cached on globalThis so that Next's dev-mode hot reloading and Vercel's reuse of a
+ * warm serverless instance do not open a new connection pool every time this module is
+ * re-evaluated.
  */
-export const db = drizzle(neon(connectionString), { schema });
+const globalForDb = globalThis as unknown as { veritasDb?: Db };
+
+export const db: Db = globalForDb.veritasDb ?? createDb().db;
+
+if (process.env.NODE_ENV !== 'production') {
+  globalForDb.veritasDb = db;
+}
 
 export { schema };

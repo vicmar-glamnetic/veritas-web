@@ -19,7 +19,7 @@ config({ path: ['.env.local', '.env'], quiet: true });
 
 import { sql } from 'drizzle-orm';
 
-import { createNodeDb } from './node-client';
+import { createDb } from './client';
 import {
   bookingEvents,
   bookings,
@@ -180,7 +180,7 @@ const SESSIONS: SessionSeed[] = [
 /* Seed                                                                       */
 /* -------------------------------------------------------------------------- */
 
-const { db, pool } = createNodeDb();
+const { db, pool } = createDb();
 
 function required<T>(value: T | undefined, what: string): T {
   if (value === undefined) throw new Error(`Seed inconsistency: ${what} was not inserted.`);
