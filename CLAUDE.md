@@ -206,6 +206,37 @@ Environment variables are documented in `.env.example`. Never commit a real one.
 - `/book` is currently a placeholder pointing at the phone number. Milestone 4 replaces
   it wholesale.
 
+## The admin area
+
+`/admin` is guarded by `(app)/layout.tsx`, which calls `requireStaff()`. `/admin/login`
+sits outside that group so it can render unauthenticated.
+
+**Every server action calls `requireStaff()` or `requireAdmin()` for itself.** An action
+is its own endpoint and is reachable without the protecting layout ever rendering, so
+the page guard alone secures nothing.
+
+- Sessions are rows in `staff_sessions`, not a self-contained signed cookie, so
+  deactivating a staff member ends their access on the next request. The cookie holds an
+  opaque token; the stored value is its HMAC keyed with `SESSION_SECRET`.
+- Login answers every failure identically and always runs a password verification, so an
+  unknown address cannot be told apart from a wrong password by timing or wording.
+- Status changes enforce the allowed-from list **in the UPDATE's WHERE clause**, so two
+  receptionists clicking at once cannot both write a `booking_events` row, and a
+  cancelled booking can never be revived.
+- **Admin forms label by wrapping, not by `htmlFor`.** These screens repeat the same
+  form once per row, so any id derived from the field name is duplicated down the page
+  and `htmlFor` then points at the wrong control or none. `Field` in
+  `(app)/ui.tsx` nests the control inside the `<label>`; do not reintroduce ids for
+  labelling. The trade is that a `hint` becomes part of the accessible name.
+
+## Layouts
+
+`src/app/layout.tsx` is the document shell and nothing more. The patient-facing header,
+footer and mobile action bar live in `src/app/(site)/layout.tsx`; the admin area has its
+own shell. Putting the site chrome in the root layout meant `/admin` rendered the public
+navigation, the public footer, a fixed "Call the clinic" bar over the front desk's
+screen, and two nested `<main>` landmarks.
+
 ## The booking flow
 
 `/book` holds its state in the URL, not in component state. Which step you are on is a

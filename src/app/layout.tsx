@@ -1,15 +1,19 @@
 import type { Metadata } from 'next';
 
-import { MobileActions } from '@/components/mobile-actions';
-import { SiteFooter } from '@/components/site-footer';
-import { SiteHeader } from '@/components/site-header';
-import { telHref } from '@/lib/mobile';
-import { ALLOW_INDEXING } from '@/lib/indexing';
 import { getSiteSettings } from '@/lib/queries';
+import { ALLOW_INDEXING } from '@/lib/indexing';
 import { SITE_URL } from '@/lib/site';
 
 import './globals.css';
 
+/**
+ * The document shell, and nothing else.
+ *
+ * The public site's header, footer and mobile action bar live in `(site)/layout.tsx`,
+ * not here. Having them here meant the admin area rendered the whole patient-facing
+ * chrome around itself: two nested <main> landmarks, the public navigation, and a
+ * fixed "Call the clinic / Book" bar over the front desk's screen.
+ */
 export async function generateMetadata(): Promise<Metadata> {
   const settings = await getSiteSettings();
   const description =
@@ -42,27 +46,13 @@ export async function generateMetadata(): Promise<Metadata> {
 export const viewport = {
   width: 'device-width',
   initialScale: 1,
-  themeColor: '#0e6058',
+  themeColor: '#1a4064',
 };
 
-export default async function RootLayout({ children }: LayoutProps<'/'>) {
-  const settings = await getSiteSettings();
+export default function RootLayout({ children }: LayoutProps<'/'>) {
   return (
     <html lang="en-PH" className="h-full antialiased">
-      <body className="flex min-h-full flex-col bg-paper text-ink-900">
-        <a className="skip-link" href="#main">
-          Skip to main content
-        </a>
-        <SiteHeader />
-        <main id="main" className="flex-1">
-          {children}
-        </main>
-        <SiteFooter />
-        <MobileActions
-          phone={settings.phonePrimary || null}
-          telHref={settings.phonePrimary ? telHref(settings.phonePrimary) : null}
-        />
-      </body>
+      <body className="flex min-h-full flex-col bg-paper text-ink-900">{children}</body>
     </html>
   );
 }

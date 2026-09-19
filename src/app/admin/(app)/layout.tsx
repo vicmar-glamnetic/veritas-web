@@ -55,7 +55,7 @@ export default async function AdminAppLayout({ children }: { children: React.Rea
         <aside className="lg:w-56 lg:shrink-0">
           <AdminNav role={staff.role} />
         </aside>
-        <main className="mt-5 min-w-0 flex-1 lg:mt-0">{children}</main>
+        <main id="main" className="mt-5 min-w-0 flex-1 lg:mt-0">{children}</main>
       </div>
     </div>
   );
