@@ -33,14 +33,14 @@ export async function submitInquiry(
     }
     return {
       status: 'error',
-      message: 'Please check the highlighted fields.',
+      message: 'Almost there. Please check the fields marked below.',
       fieldErrors,
     };
   }
 
   // A bot filled the hidden field. Look successful so it does not retry.
   if (parsed.data.website) {
-    return { status: 'success', message: 'Thank you — your message has been sent.' };
+    return { status: 'success', message: 'Thank you, your message has been sent.' };
   }
 
   const ip = await clientIp();
@@ -49,7 +49,7 @@ export async function submitInquiry(
     return {
       status: 'error',
       message:
-        'You have sent several messages already. Please wait a little while, or call the clinic if it is urgent.',
+        'That is a few messages in a short time. Please wait a little while before sending another, or ring the clinic if it cannot wait.',
     };
   }
   void pruneRateLimits();
@@ -60,7 +60,7 @@ export async function submitInquiry(
   if (!inbox) {
     return {
       status: 'error',
-      message: 'We could not send your message. Please call the clinic instead.',
+      message: 'Something is wrong with our mail setup. Please ring the clinic instead.',
     };
   }
 
@@ -89,12 +89,12 @@ export async function submitInquiry(
     return {
       status: 'error',
       message:
-        'Sorry — we could not send your message just now. Please call or message us on Facebook instead.',
+        'Sorry, we could not get that through just now. Please ring us or send a message on Facebook instead.',
     };
   }
 
   return {
     status: 'success',
-    message: 'Thank you. Your message has been sent and we will reply as soon as we can.',
+    message: 'Thank you. It has landed at the front desk and we will reply as soon as we can.',
   };
 }

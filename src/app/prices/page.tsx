@@ -10,7 +10,7 @@ export const revalidate = 300;
 export const metadata: Metadata = {
   title: 'Prices',
   description:
-    'Laboratory and imaging prices in Philippine pesos — CBC, urinalysis, lipid profile, chest X-ray, ultrasound, ECG, 2D echo and more. Search the full list.',
+    'What our laboratory and imaging tests cost, in pesos. CBC, urinalysis, lipid profile, chest X-ray, ultrasound, ECG, 2D echo and the rest. Search the list.',
 };
 
 export default async function PricesPage() {
@@ -28,15 +28,15 @@ export default async function PricesPage() {
     <>
       <PageHeader
         title="Prices"
-        lead="Our laboratory and imaging rates. Type in the box to find a test quickly."
+        lead="What our laboratory and imaging tests cost. Type in the box to jump straight to one."
       />
 
       <Container className="py-10">
-        <Callout title="Please read">
-          These are our usual rates and they may change. The amount is confirmed at the
-          clinic before your test is done, and you pay there — nothing is collected
-          online. If a doctor asks for a test you cannot find here, call us and we will
-          tell you the price.
+        <Callout title="Two things worth knowing">
+          These are our usual rates and they do change. You will be told the amount at
+          the desk before anything is done, and you pay there. Nothing is collected
+          through this website. Senior citizens and persons with disability get the 20%
+          discount the law provides, so bring your booklet or ID.
         </Callout>
 
         <div className="mt-6">
@@ -46,7 +46,7 @@ export default async function PricesPage() {
         <div className="mt-10 flex flex-wrap gap-3">
           <ButtonLink href="/book">Book an appointment</ButtonLink>
           <ButtonLink href="/contact" variant="secondary">
-            Ask about a test
+            Ask us about a test
           </ButtonLink>
         </div>
       </Container>

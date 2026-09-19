@@ -25,7 +25,7 @@ export const phMobileSchema = z
     if (!normalized) {
       ctx.addIssue({
         code: 'custom',
-        message: 'Enter a Philippine mobile number, for example 0917 123 4567.',
+        message: 'That does not look like a Philippine mobile number. Try it like 0917 123 4567.',
       });
       return z.NEVER;
     }
@@ -36,20 +36,20 @@ export const inquirySchema = z.object({
   name: z
     .string()
     .trim()
-    .min(2, 'Please enter your name.')
-    .max(120, 'That name is too long.'),
+    .min(2, 'Please put your name in.')
+    .max(120, 'That name is longer than we can store.'),
   email: z
     .string()
     .trim()
-    .min(1, 'Please enter your email address.')
+    .min(1, 'We need an email address to reply to.')
     .max(200)
     .pipe(z.email('That email address does not look right.')),
   mobile: optionalText(30),
   message: z
     .string()
     .trim()
-    .min(10, 'Please tell us a little more — at least 10 characters.')
-    .max(2000, 'Please keep your message under 2000 characters.'),
+    .min(10, 'Could you say a little more than that?')
+    .max(2000, 'That is longer than we can take. Please trim it to 2000 characters.'),
   /** Honeypot: a field no human sees. Bots fill it in. */
   website: z.string().max(0).optional(),
 });

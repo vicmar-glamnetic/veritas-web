@@ -13,7 +13,7 @@ export type PriceItem = {
 };
 
 const GROUPS = [
-  { key: 'laboratory' as const, heading: 'Laboratory tests' },
+  { key: 'laboratory' as const, heading: 'Blood and urine tests' },
   { key: 'imaging' as const, heading: 'X-ray, ultrasound and heart tests' },
   { key: 'consultation' as const, heading: 'Consultations' },
 ];
@@ -36,7 +36,7 @@ export function PriceList({ items }: { items: PriceItem[] }) {
     <div>
       <div className="rounded-xl border border-line bg-surface p-4">
         <label htmlFor="price-search" className="block text-sm font-semibold text-ink-900">
-          Search for a test
+          Look for a test
         </label>
         <input
           id="price-search"
@@ -50,16 +50,16 @@ export function PriceList({ items }: { items: PriceItem[] }) {
         <p aria-live="polite" className="mt-2 text-sm text-ink-500">
           {trimmed
             ? `${matches.length} ${matches.length === 1 ? 'test matches' : 'tests match'} “${query.trim()}”`
-            : `${items.length} tests and services listed`}
+            : `${items.length} tests listed`}
         </p>
       </div>
 
       {matches.length === 0 ? (
         <div className="mt-6 rounded-xl border border-line bg-surface-sunken px-5 py-8 text-center">
-          <p className="font-semibold text-ink-900">Nothing matched that search.</p>
+          <p className="font-semibold text-ink-900">Nothing here matches that.</p>
           <p className="mx-auto mt-2 max-w-md text-sm text-ink-500">
-            We may still offer it — not every test is listed here. Please call the clinic
-            and ask.
+            We may still do it. Not every test we offer is on this list, so ring the
+            clinic and ask.
           </p>
         </div>
       ) : (
@@ -83,7 +83,7 @@ export function PriceList({ items }: { items: PriceItem[] }) {
                     </div>
                     {item.prepInstructions ? (
                       <p className="mt-1.5 text-sm leading-relaxed text-ink-500">
-                        <span className="font-semibold text-ink-700">Before you come: </span>
+                        <span className="font-semibold text-ink-700">Prepare: </span>
                         {item.prepInstructions}
                       </p>
                     ) : null}

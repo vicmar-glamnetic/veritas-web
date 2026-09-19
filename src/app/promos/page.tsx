@@ -10,7 +10,7 @@ export const revalidate = 120;
 export const metadata: Metadata = {
   title: 'Promos',
   description:
-    'Current promos and package offers at the clinic. Only offers running right now are shown.',
+    'Package offers and promos running at the clinic right now. Anything that has finished comes off this page by itself.',
 };
 
 export default async function PromosPage() {
@@ -20,16 +20,16 @@ export default async function PromosPage() {
     <>
       <PageHeader
         title="Promos"
-        lead="Only offers running right now appear here — once a promo ends it comes off the page automatically, so nothing you see is expired."
+        lead="Only what is running today. When a promo finishes it comes off this page by itself, so nothing you see here has expired."
       />
 
       <Container className="py-10">
         {promos.length === 0 ? (
           <div className="rounded-xl border border-line bg-surface-sunken px-5 py-10 text-center">
-            <p className="font-semibold text-ink-900">No promos running at the moment.</p>
+            <p className="font-semibold text-ink-900">Nothing running just now.</p>
             <p className="mx-auto mt-2 max-w-md text-sm text-ink-500">
-              Check back soon, or follow our Facebook page — new offers are posted there
-              first.
+              New offers go up on our Facebook page first, so follow us there and you
+              will hear about the next one.
             </p>
           </div>
         ) : (
@@ -57,7 +57,7 @@ export default async function PromosPage() {
                     {promo.body}
                   </p>
                   <p className="mt-4 text-xs font-semibold text-ink-500">
-                    Until {formatManilaDate(manilaToUtc(promo.endsOn, '12:00'))}
+                    Runs until {formatManilaDate(manilaToUtc(promo.endsOn, '12:00'))}
                   </p>
                 </div>
               </li>

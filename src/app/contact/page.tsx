@@ -11,7 +11,7 @@ export const revalidate = 300;
 export const metadata: Metadata = {
   title: 'Contact and directions',
   description:
-    'Clinic address, phone numbers, Facebook page and directions. Send us a question and we will reply by email.',
+    'Where the clinic is, our phone numbers and Facebook page, and a form for questions we can answer by email.',
 };
 
 export default async function ContactPage() {
@@ -21,7 +21,7 @@ export default async function ContactPage() {
     <>
       <PageHeader
         title="Contact us"
-        lead="Call us for anything urgent — that is always fastest. For everything else, send a message below and we will reply by email."
+        lead="Ringing is always fastest, especially if it is urgent. For anything that can wait, the form below reaches the same desk and we will reply by email."
       />
 
       <Container className="py-10">
@@ -71,7 +71,7 @@ export default async function ContactPage() {
             {settings.facebookUrl || settings.email ? (
               <Card>
                 <h2 className="text-sm font-bold tracking-wide text-ink-900 uppercase">
-                  Message us
+                  Or message us
                 </h2>
                 <ul className="mt-2 space-y-2 text-sm">
                   {settings.facebookUrl ? (
@@ -105,8 +105,9 @@ export default async function ContactPage() {
           <div>
             <h2 className="text-xl font-bold text-ink-900">Send us a question</h2>
             <p className="mt-2 text-sm leading-relaxed text-ink-500">
-              This form is for general questions — opening hours, whether we offer a
-              test, how to prepare. It is not for medical advice or results.
+              Good for things like opening hours, whether we do a particular test, or how
+              to prepare for one. Please do not use it to ask for medical advice or
+              results; we cannot give either by email.
             </p>
             <div className="mt-5">
               <InquiryForm />
@@ -117,7 +118,7 @@ export default async function ContactPage() {
         {settings.mapEmbedUrl ? (
           <section className="mt-12" aria-labelledby="map-heading">
             <h2 id="map-heading" className="text-xl font-bold text-ink-900">
-              How to find us
+              Getting here
             </h2>
             <div className="mt-4 overflow-hidden rounded-xl border border-line">
               <iframe
@@ -132,9 +133,9 @@ export default async function ContactPage() {
         ) : null}
 
         <div className="mt-10">
-          <Callout tone="accent" title="If this is an emergency">
-            Do not use this form. Go to the nearest hospital emergency room, or call
-            911.
+          <Callout tone="accent" title="If it is an emergency">
+            Please do not wait for us. Go straight to the nearest hospital emergency room,
+            or call 911.
           </Callout>
         </div>
       </Container>

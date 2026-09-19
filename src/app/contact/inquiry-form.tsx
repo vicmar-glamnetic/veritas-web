@@ -67,10 +67,10 @@ export function InquiryForm() {
         role="status"
         className="rounded-xl border border-brand-200 bg-brand-50 px-5 py-6 text-brand-900"
       >
-        <p className="text-lg font-bold">Message sent</p>
+        <p className="text-lg font-bold">That has reached us</p>
         <p className="mt-2 text-sm leading-relaxed">{state.message}</p>
         <p className="mt-4 text-sm leading-relaxed">
-          If your concern is urgent, please call the clinic rather than waiting for a
+          If it turns out to be urgent, please ring the clinic instead of waiting on our
           reply.
         </p>
       </div>
@@ -101,7 +101,7 @@ export function InquiryForm() {
         />
       </Field>
 
-      <Field id="email" label="Email address" error={errors.email} hint="We reply here.">
+      <Field id="email" label="Email address" error={errors.email} hint="This is where our reply goes.">
         <input
           id="email"
           name="email"
@@ -119,7 +119,7 @@ export function InquiryForm() {
         id="mobile"
         label="Mobile number (optional)"
         error={errors.mobile}
-        hint="Only if you would rather we call or text you."
+        hint="Only if you would rather we rang or texted you."
       >
         <input
           id="mobile"
@@ -152,8 +152,8 @@ export function InquiryForm() {
       </div>
 
       <p className="text-sm leading-relaxed text-ink-500">
-        We use what you send here only to answer you. Please do not include medical
-        details or test results in this form. See our{' '}
+        We use what you write here only to answer you, and nothing else. Please keep
+        medical details and test results out of it. More in our{' '}
         <Link href="/privacy" className="font-medium text-brand-700 underline underline-offset-2">
           privacy notice
         </Link>

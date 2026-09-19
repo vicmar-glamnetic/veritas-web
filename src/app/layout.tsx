@@ -10,14 +10,14 @@ import './globals.css';
 export async function generateMetadata(): Promise<Metadata> {
   const settings = await getSiteSettings();
   const description =
-    'Consultations, laboratory tests, X-ray, ultrasound, ECG and 2D echo. ' +
-    'Book your appointment online — no payment needed, you pay at the clinic.';
+    'Consultations, blood tests, X-ray, ultrasound, ECG and 2D echo, all in the same ' +
+    'building. Book a slot online in about a minute. You pay at the clinic, on the day.';
 
   return {
     metadataBase: new URL(SITE_URL),
     title: {
-      default: `${settings.clinicName} — Book your appointment online`,
-      template: `%s · ${settings.clinicName}`,
+      default: `${settings.clinicName} | Book an appointment`,
+      template: `%s | ${settings.clinicName}`,
     },
     description,
     applicationName: settings.clinicName,
@@ -25,7 +25,7 @@ export async function generateMetadata(): Promise<Metadata> {
       type: 'website',
       siteName: settings.clinicName,
       locale: 'en_PH',
-      title: `${settings.clinicName} — Book your appointment online`,
+      title: `${settings.clinicName} | Book an appointment`,
       description,
       url: SITE_URL,
     },

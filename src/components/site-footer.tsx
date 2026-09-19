@@ -24,7 +24,7 @@ export async function SiteFooter() {
               rel="noopener noreferrer"
               target="_blank"
             >
-              Follow us on Facebook
+              Find us on Facebook
             </a>
           ) : null}
         </div>
@@ -67,7 +67,7 @@ export async function SiteFooter() {
 
         <div className="sm:col-span-2 lg:col-span-1">
           <h2 className="text-sm font-bold tracking-wide text-ink-900 uppercase">
-            Clinic hours
+            When we are open
           </h2>
           {settings.openingHoursText ? (
             <p className="mt-3 text-sm leading-relaxed whitespace-pre-line text-ink-500">

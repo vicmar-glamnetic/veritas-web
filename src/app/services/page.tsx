@@ -9,34 +9,34 @@ export const revalidate = 300;
 export const metadata: Metadata = {
   title: 'Services',
   description:
-    'Consultations, laboratory tests, chest X-ray, ultrasound, 12-lead ECG and 2D echocardiogram, explained in plain language.',
+    'What we offer and what each test is actually like: consultations, blood and urine tests, chest X-ray, ultrasound, 12-lead ECG and 2D echo.',
 };
 
 /** Plain-language explanations of what each kind of test is actually like. */
 const EXPLAINERS = [
   {
-    title: 'Consultations',
-    body: 'You sit down with a doctor, they listen to what is bothering you, examine you, and explain what they think is going on. You leave with a plan — a prescription, a test to take, or a date to come back. Bring any medicines you are already taking and any previous results.',
+    title: 'Seeing a doctor',
+    body: 'You sit down, the doctor listens, examines you and tells you what they think is going on. You leave with something: a prescription, a test, or a date to come back. Bring whatever medicines you are already taking, in the box, and any results from before.',
   },
   {
-    title: 'Laboratory tests',
-    body: 'Most of these need a small blood sample from your arm, or a urine or stool sample you provide here. The needle part takes under a minute. Some tests need you to skip breakfast — we will tell you which when you book, and it is written on your confirmation.',
+    title: 'Blood and urine tests',
+    body: 'A small sample of blood is taken from your arm. The needle part is over in less than a minute. Urine and stool samples you provide here, in the toilet by the laboratory. Several tests want you to skip breakfast first; we will say so when you book.',
   },
   {
     title: 'X-ray',
-    body: 'You stand against a plate for a few seconds while a picture is taken of your chest or another part of the body. It does not hurt and you feel nothing at all. Wear a top without metal buttons, zips or an underwire if you can. Tell us before the test if you are pregnant or think you might be.',
+    body: 'You stand against a plate, hold your breath, and it is done in seconds. You feel nothing. Wear a top with no metal buttons, zips or underwire if you can, otherwise you will be asked to change. Tell the staff first if you are pregnant or think you might be.',
   },
   {
     title: 'Ultrasound',
-    body: 'A gel is put on your skin and a small handheld probe is moved over the area to make a picture using sound, not radiation. It is painless and safe in pregnancy. Some scans need you to skip breakfast, or to drink water and hold a full bladder — this is the part people forget, so please read your confirmation.',
+    body: 'Gel on the skin, a small probe moved over the area, a picture built from sound rather than radiation. It does not hurt and it is safe in pregnancy. Some scans need an empty stomach, others need a full bladder, which is the bit people forget. Your confirmation will tell you which.',
   },
   {
-    title: 'ECG (electrocardiogram)',
-    body: 'Small stickers are placed on your chest, arms and legs, and a machine records your heartbeat for a few seconds. Nothing is passed into you; the machine only listens. It takes about ten minutes including getting ready.',
+    title: 'ECG',
+    body: 'Stickers on your chest, arms and ankles, then the machine records your heartbeat for about ten seconds. Nothing goes into you; the machine only listens. Counting the getting-ready, allow ten minutes.',
   },
   {
-    title: '2D echocardiogram',
-    body: 'An ultrasound of the heart. You lie on your side while the doctor moves a probe over your chest and watches your heart valves and chambers moving on screen. It takes around 45 minutes and is painless. A two-piece outfit makes it easier.',
+    title: '2D echo',
+    body: 'An ultrasound of the heart itself. You lie on your left side while the doctor watches your valves and chambers moving on the screen. It takes around 45 minutes, so do not book it on a tight schedule. A two-piece outfit is easier than a dress.',
   },
 ] as const;
 
@@ -48,7 +48,7 @@ const CATEGORY_SECTIONS = [
   },
   {
     key: 'laboratory' as const,
-    heading: 'Laboratory tests',
+    heading: 'Blood and urine tests',
     note: null,
   },
   {
@@ -73,7 +73,7 @@ function ServiceList({ items }: { items: Service[] }) {
           </div>
           {service.prepInstructions ? (
             <p className="mt-1.5 text-sm leading-relaxed text-ink-500">
-              <span className="font-semibold text-ink-700">Before you come: </span>
+              <span className="font-semibold text-ink-700">Prepare: </span>
               {service.prepInstructions}
             </p>
           ) : null}
@@ -90,13 +90,13 @@ export default async function ServicesPage() {
     <>
       <PageHeader
         title="Services"
-        lead="Everything we offer, and what each test is actually like. If you are not sure which test you need, book a consultation and the doctor will tell you."
+        lead="What we offer, and what each test is actually like to have done. Not sure which one you need? Book a consultation and let the doctor decide."
       />
 
       <Container className="py-10">
         <section aria-labelledby="explainers">
           <h2 id="explainers" className="text-xl font-bold text-ink-900">
-            What to expect
+            What actually happens
           </h2>
           <ul className="mt-5 grid gap-4 sm:grid-cols-2">
             {EXPLAINERS.map((item) => (
@@ -128,14 +128,14 @@ export default async function ServicesPage() {
 
         <div className="mt-10 space-y-5">
           <Callout>
-            Prices shown are our usual rates and may change. The amount is always
-            confirmed at the clinic before your test is done. There is nothing to pay
-            online.
+            The prices here are our usual rates and they do change from time to time. You
+            will be told the amount at the desk before anything is done, and you pay
+            there. Nothing is collected through this website.
           </Callout>
           <div className="flex flex-wrap gap-3">
             <ButtonLink href="/book">Book an appointment</ButtonLink>
             <ButtonLink href="/prices" variant="secondary">
-              See the full price list
+              What things cost
             </ButtonLink>
           </div>
         </div>

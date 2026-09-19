@@ -7,11 +7,10 @@ export default function NotFound() {
         Page not found
       </p>
       <h1 className="mt-3 text-2xl font-bold text-ink-900 sm:text-3xl">
-        We couldn&rsquo;t find that page.
+        That page isn&rsquo;t here.
       </h1>
       <p className="mx-auto mt-3 max-w-md text-base text-ink-500">
-        It may have moved, or the link may be out of date. Try the clinic&rsquo;s main
-        pages below.
+        It may have moved, or the link may be an old one. Try from the home page instead.
       </p>
       <div className="mt-8 flex flex-wrap justify-center gap-3">
         <ButtonLink href="/">Go to the home page</ButtonLink>

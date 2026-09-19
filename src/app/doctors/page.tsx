@@ -10,7 +10,7 @@ export const revalidate = 300;
 export const metadata: Metadata = {
   title: 'Our doctors',
   description:
-    'Meet the doctors at the clinic — family medicine, internal medicine, cardiology and pediatrics — and see which days each of them holds clinic.',
+    'The doctors at the clinic, their specialties, and which days each of them holds clinic.',
 };
 
 export default async function DoctorsPage() {
@@ -23,12 +23,15 @@ export default async function DoctorsPage() {
     <>
       <PageHeader
         title="Our doctors"
-        lead="Clinic days come straight from the current schedule, so what you see here is what the front desk sees. Doctors are occasionally called away — booking online is the surest way to get a slot."
+        lead="These clinic days come from the same schedule the front desk works off, so they are current. Doctors do get called away now and then. Booking ahead is the surest way to be seen."
       />
 
       <Container className="py-10">
         {doctors.length === 0 ? (
-          <Callout>Our doctors&rsquo; schedules are being updated. Please call the clinic.</Callout>
+          <Callout>
+            The schedule is being updated at the moment. Please ring the clinic and we
+            will tell you who is in.
+          </Callout>
         ) : (
           <ul className="space-y-4">
             {doctors.map((doctor) => {
@@ -67,7 +70,7 @@ export default async function DoctorsPage() {
                     </h3>
                     {blocks.length === 0 ? (
                       <p className="mt-1.5 text-sm text-ink-500">
-                        No regular clinic at the moment — please call to ask.
+                        No regular clinic day at the moment. Please ring and ask.
                       </p>
                     ) : (
                       <ul className="mt-1.5 space-y-1">

@@ -36,9 +36,10 @@ export default async function PrivacyPage() {
           <p className="text-sm text-ink-500">Last updated: {LAST_UPDATED}</p>
 
           <p>
-            {settings.clinicName} is the personal information controller for the data
-            described here. We ask for as little as we can, we use it only for the
-            reasons set out below, and we do not sell it or share it for advertising.
+            {settings.clinicName} is the personal information controller for everything
+            described here. The short version: we ask for as little as we can get away
+            with, we use it only for the reasons below, and we never sell it or hand it
+            to advertisers.
           </p>
 
           <h2>What we collect, and why</h2>
@@ -52,8 +53,8 @@ export default async function PrivacyPage() {
             </li>
             <li>Your email address, so we can send your confirmation and reference code.</li>
             <li>
-              Anything you type into the notes box. Please keep this brief — it is not a
-              medical record.
+              Anything you type into the notes box. Keep it short. It is not a medical
+              record and it is not read by a doctor before you arrive.
             </li>
             <li>
               The service, doctor and time you chose, and the date and time you gave your
@@ -67,8 +68,9 @@ export default async function PrivacyPage() {
           </ul>
 
           <p>
-            We do not ask for your medical history, test results or diagnosis through
-            this website. Please do not send those to us through the inquiry form.
+            We never ask for your medical history, test results or diagnosis through this
+            website, and you should not send them to us through the inquiry form either.
+            Bring them with you instead.
           </p>
 
           <h2>Our legal basis</h2>
@@ -82,9 +84,9 @@ export default async function PrivacyPage() {
 
           <h2>Who else sees it</h2>
           <p>
-            Clinic staff who need it to do their work — reception and the doctor you are
-            seeing. Beyond that, your data is held by service providers who process it
-            only on our instructions:
+            The staff who need it to do their work, meaning reception and the doctor you
+            are seeing. Beyond that, your details sit with service providers who handle
+            them only on our instructions:
           </p>
           <ul>
             <li>Our website and database hosting providers, who store the records.</li>
@@ -94,8 +96,8 @@ export default async function PrivacyPage() {
             </li>
           </ul>
           <p>
-            We do not sell your data, and we do not share it with advertisers. We will
-            only disclose it otherwise where the law requires it.
+            We do not sell your data and we do not share it with advertisers. The only
+            other time we would hand it over is where the law obliges us to.
           </p>
 
           <h2>How long we keep it</h2>
@@ -118,7 +120,7 @@ export default async function PrivacyPage() {
           <h2>Your rights</h2>
           <p>Under the Data Privacy Act you have the right to:</p>
           <ul>
-            <li>Be told how your data is being used — which is what this notice is for.</li>
+            <li>Be told how your data is being used, which is what this page is for.</li>
             <li>Ask for a copy of the data we hold about you.</li>
             <li>Have anything inaccurate corrected.</li>
             <li>Object to how we process it, or ask us to block or erase it.</li>

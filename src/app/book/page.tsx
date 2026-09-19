@@ -9,7 +9,7 @@ export const revalidate = 300;
 export const metadata: Metadata = {
   title: 'Book an appointment',
   description:
-    'Book a consultation, laboratory test or scan online. No payment needed — you pay at the clinic.',
+    'Book a consultation, blood test or scan. Nothing to pay online; you settle it at the clinic on the day.',
 };
 
 /**
@@ -26,13 +26,13 @@ export default async function BookPage() {
     <>
       <PageHeader
         title="Book an appointment"
-        lead="Online booking is being set up right now. In the meantime, please call the clinic and we will book you in."
+        lead="We are still wiring up online booking. Until it is live, ring the clinic and the front desk will put you in the book."
       />
 
       <Container className="py-10">
-        <Callout title="Online booking is coming shortly">
-          We are finishing the online booking system. Until it is switched on, the
-          fastest way to get a slot is to call us during clinic hours.
+        <Callout title="Not switched on yet">
+          The booking system is nearly finished. For now the quickest way to get a slot
+          is to ring us during clinic hours, and we will write you in.
         </Callout>
 
         <div className="mt-8 flex flex-col gap-3 sm:flex-row">
@@ -51,7 +51,7 @@ export default async function BookPage() {
         {settings.openingHoursText ? (
           <div className="mt-8">
             <h2 className="text-sm font-bold tracking-wide text-ink-900 uppercase">
-              Clinic hours
+              When we are open
             </h2>
             <p className="mt-2 text-sm leading-relaxed whitespace-pre-line text-ink-500">
               {settings.openingHoursText}

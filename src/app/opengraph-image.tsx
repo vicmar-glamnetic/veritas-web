@@ -11,7 +11,7 @@ import { getSiteSettings } from '@/lib/queries';
  */
 export const size = { width: 1200, height: 630 };
 export const contentType = 'image/png';
-export const alt = 'Veritas Clinic — book your appointment online';
+export const alt = 'Veritas Clinic. Book an appointment online.';
 
 export default async function OpengraphImage() {
   const settings = await getSiteSettings();
@@ -55,7 +55,7 @@ export default async function OpengraphImage() {
 
         <div style={{ display: 'flex', flexDirection: 'column' }}>
           <div style={{ display: 'flex', fontSize: 66, fontWeight: 700, lineHeight: 1.1 }}>
-            Book your appointment online
+            Book a slot, come at that time
           </div>
           <div
             style={{
@@ -67,7 +67,7 @@ export default async function OpengraphImage() {
               maxWidth: 900,
             }}
           >
-            Consultations · Laboratory · X-ray · Ultrasound · ECG · 2D Echo
+Consultations, blood tests, X-ray, ultrasound, ECG and 2D echo
           </div>
         </div>
 
@@ -82,7 +82,7 @@ export default async function OpengraphImage() {
             color: '#eefaf7',
           }}
         >
-          <div style={{ display: 'flex' }}>No payment online — you pay at the clinic</div>
+          <div style={{ display: 'flex' }}>Nothing to pay online. You pay at the clinic.</div>
           {settings.phonePrimary ? (
             <div style={{ display: 'flex', fontWeight: 700 }}>{settings.phonePrimary}</div>
           ) : null}
