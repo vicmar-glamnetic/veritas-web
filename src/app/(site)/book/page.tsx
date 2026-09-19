@@ -263,7 +263,7 @@ export default async function BookPage({
                                 session: slot.sessionId,
                                 start: slot.start.toISOString(),
                               })}#your-details`}
-                              className="flex min-h-[3rem] items-center justify-center rounded border border-line-strong bg-surface px-2 text-sm font-semibold text-ink-900 hover:border-brand-400 hover:bg-brand-50"
+                              className="flex min-h-[3rem] items-center justify-center rounded border border-line-strong bg-surface px-2 text-sm font-semibold text-ink-900 hover:border-brand-400 hover:bg-brand-50 active:bg-brand-100"
                             >
                               {formatManilaTime(slot.start)}
                             </Link>
@@ -426,8 +426,8 @@ function Step({
 function KindPicker() {
   return (
     <div>
-      <h3 className="text-xs font-semibold tracking-[0.14em] text-ink-400 uppercase">
-        What kind of visit?
+      <h3 className="text-sm font-semibold text-ink-900">
+        What kind of visit? Tap one to start.
       </h3>
       <ul className="mt-4 grid gap-3">
         {KINDS.map((kind) => (
@@ -464,11 +464,11 @@ async function ServicePicker({ kind }: { kind: string }) {
   return (
     <div>
       <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
-        <h3 className="text-xs font-semibold tracking-[0.14em] text-ink-400 uppercase">
-          {heading}: choose one
+        <h3 className="text-sm font-semibold text-ink-900">
+          {heading}: tap the one you need.
         </h3>
         <Link href="/book" className="text-sm text-brand-700 underline underline-offset-4">
-          Not this
+          &larr; Pick something else
         </Link>
       </div>
 
@@ -477,19 +477,27 @@ async function ServicePicker({ kind }: { kind: string }) {
           Nothing in this group can be booked online at the moment. Please ring the clinic.
         </p>
       ) : (
-        <ul className="mt-3 divide-y divide-line border-t border-line">
+        <ul className="mt-4 grid gap-2">
           {items.map((item) => (
             <li key={item.id}>
               <Link
                 href={buildHref({ kind, service: item.id })}
-                className="flex min-h-[3.25rem] items-center justify-between gap-4 py-3 text-ink-900 hover:text-brand-700"
+                className="group flex min-h-[3.5rem] items-center justify-between gap-4 rounded border border-line-strong bg-surface px-4 py-3 text-ink-900 hover:border-brand-400 hover:bg-brand-50 active:bg-brand-100"
               >
-                <span>{item.name}</span>
-                {item.isListedOnline ? (
-                  <span className="shrink-0 text-sm font-semibold text-brand-700 tabular-nums">
-                    {formatPhp(item.pricePhp)}
+                <span className="min-w-0 font-medium">{item.name}</span>
+                <span className="flex shrink-0 items-center gap-3">
+                  {item.isListedOnline ? (
+                    <span className="text-sm font-semibold text-brand-700 tabular-nums">
+                      {formatPhp(item.pricePhp)}
+                    </span>
+                  ) : null}
+                  <span
+                    aria-hidden="true"
+                    className="text-lg text-brand-400 group-hover:text-brand-700"
+                  >
+                    &rarr;
                   </span>
-                ) : null}
+                </span>
               </Link>
             </li>
           ))}
@@ -521,25 +529,31 @@ function DoctorPicker({
   return (
     <div>
       <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
-        <h3 className="text-xs font-semibold tracking-[0.14em] text-ink-400 uppercase">
-          Which doctor?
-        </h3>
+        <h3 className="text-sm font-semibold text-ink-900">Which doctor? Tap to choose.</h3>
         <Link
           href={buildHref({ kind })}
           className="text-sm text-brand-700 underline underline-offset-4"
         >
-          Change service
+          &larr; Change service
         </Link>
       </div>
-      <ul className="mt-3 divide-y divide-line border-t border-line">
+      <ul className="mt-4 grid gap-2 sm:grid-cols-2">
         {doctors.map((doc) => (
           <li key={doc.id}>
             <Link
               href={buildHref({ kind, service: serviceId, doctor: doc.id })}
-              className="block py-3.5 hover:text-brand-700"
+              className="group flex h-full min-h-[3.5rem] items-center justify-between gap-4 rounded border border-line-strong bg-surface px-4 py-3 hover:border-brand-400 hover:bg-brand-50 active:bg-brand-100"
             >
-              <span className="block font-serif text-lg text-ink-900">{doc.fullName}</span>
-              <span className="block text-sm text-ink-500">{doc.specialty}</span>
+              <span className="min-w-0">
+                <span className="block font-serif text-lg text-ink-900">{doc.fullName}</span>
+                <span className="block text-sm text-ink-500">{doc.specialty}</span>
+              </span>
+              <span
+                aria-hidden="true"
+                className="shrink-0 text-lg text-brand-400 group-hover:text-brand-700"
+              >
+                &rarr;
+              </span>
             </Link>
           </li>
         ))}
