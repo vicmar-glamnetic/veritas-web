@@ -15,7 +15,8 @@
     "typecheck": "tsc --noEmit",
     "test": "node --import tsx --test --test-concurrency=1 \"src/**/*.test.ts\"",
     "test:unit": "node --import tsx --test \"src/**/!(*.db).test.ts\"",
-    "db:clear-limits": "tsx scripts/clear-rate-limits.mts"
+    "db:clear-limits": "tsx scripts/clear-rate-limits.mts",
+    "db:demo-today": "tsx scripts/demo-today.mts"
   },
   "dependencies": {
     "@neon/config": "^1.7.2",

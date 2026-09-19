@@ -231,6 +231,14 @@ the page guard alone secures nothing.
 - **Doctors, staff, services and promos are a list plus one open form.** Rendering every
   record as an expanded form made a wall of inputs it was easy to type into the wrong
   one of.
+- **An unticked checkbox sends no key at all.** `checkbox` in `src/lib/admin/schemas.ts`
+  is `.nullish()` for exactly that reason. Listing `z.undefined()` inside a union is not
+  enough: the field stays required, and unticking any box failed every admin save with
+  "expected nonoptional, received undefined". Covered by `schemas.test.ts`.
+- **Editing opens a dialog, and `?edit=<id>` still works.** The Edit control is a real
+  link; the click handler only takes over when a native `<dialog>` exists, and the server
+  renders the same form inline for the no-JavaScript path. Clicking Edit on the thirtieth
+  row used to throw you to a form at the top of the page.
 - **Admin forms label by wrapping, not by `htmlFor`.** These screens repeat the same
   form once per row, so any id derived from the field name is duplicated down the page
   and `htmlFor` then points at the wrong control or none. `Field` in
@@ -290,6 +298,7 @@ because the reference code is short, and a failed lookup never says which half w
 npm test              # everything; needs a database
 npm run test:unit     # pure functions only, no database
 npm run db:clear-limits   # reset the rate-limit counters
+npm run db:demo-today     # put a few bookings on today, so Today is not empty
 ```
 
 Repeated browser runs exhaust the login rate limit (10 per IP per hour) and every later

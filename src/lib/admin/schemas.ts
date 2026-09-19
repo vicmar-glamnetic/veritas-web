@@ -14,9 +14,17 @@ const optionalText = (max: number) =>
     .nullable()
     .default(null);
 
-/** An HTML checkbox sends "on" when ticked and nothing at all when not. */
+/**
+ * An HTML checkbox sends "on" when ticked and **nothing at all** when not, so the key is
+ * absent from the form data entirely.
+ *
+ * `.optional()` is what makes an absent key valid. Listing `z.undefined()` inside the
+ * union is not enough: the field is still required, and unticking any box produced
+ * "expected nonoptional, received undefined" on every admin form.
+ */
 export const checkbox = z
-  .union([z.literal('on'), z.literal('true'), z.literal(''), z.undefined(), z.null()])
+  .union([z.literal('on'), z.literal('true'), z.literal('')])
+  .nullish()
   .transform((v) => v === 'on' || v === 'true');
 
 const intFrom = (min: number, max: number, message: string) =>
