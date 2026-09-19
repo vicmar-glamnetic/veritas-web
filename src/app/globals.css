@@ -1,26 +1,97 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/*
+ * Veritas Clinic design tokens.
+ *
+ * No web font is loaded. Most visitors arrive from Facebook on a low-end Android
+ * phone over mobile data, and the system stack costs zero bytes and renders instantly.
+ *
+ * The palette is deliberately light-only. A clinic site is read in bright daylight and
+ * printed out by staff; a dark theme is a maintenance burden with no audience here.
+ */
+
+@theme {
+  --color-brand-50: #eefaf7;
+  --color-brand-100: #d3f2ea;
+  --color-brand-200: #a9e5d8;
+  --color-brand-300: #72d0be;
+  --color-brand-400: #3fb3a0;
+  --color-brand-500: #1f9686;
+  --color-brand-600: #10786d;
+  --color-brand-700: #0e6058;
+  --color-brand-800: #0f4c47;
+  --color-brand-900: #0e3f3b;
+
+  --color-ink-900: #10211f;
+  --color-ink-700: #294340;
+  --color-ink-500: #4d635f;
+  --color-ink-400: #5e726f;
+
+  --color-surface: #ffffff;
+  --color-surface-sunken: #f3f7f6;
+  --color-line: #dbe6e3;
+
+  --color-accent-50: #fff8eb;
+  --color-accent-200: #fde3ab;
+  --color-accent-600: #b4740a;
+  --color-accent-800: #7a4f07;
+
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, "Noto Sans", sans-serif;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    scroll-behavior: smooth;
+  }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+  body {
+    background: var(--color-surface);
+    color: var(--color-ink-900);
+    font-family: var(--font-sans);
+    /* Stops iOS Safari inflating text in landscape. */
+    text-size-adjust: 100%;
+  }
+
+  /*
+   * One visible focus style everywhere, so keyboard users never lose their place.
+   * :focus-visible keeps it off mouse clicks.
+   */
+  :focus-visible {
+    outline: 3px solid var(--color-brand-600);
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@layer components {
+  /* Skip link: off-screen until focused. */
+  .skip-link {
+    position: absolute;
+    left: -9999px;
+    top: 0;
+    z-index: 100;
+  }
+  .skip-link:focus {
+    left: 0.5rem;
+    top: 0.5rem;
+    padding: 0.75rem 1rem;
+    background: var(--color-brand-700);
+    color: #fff;
+    border-radius: 0.5rem;
+  }
 }

@@ -38,20 +38,22 @@ These are not negotiable without asking the client.
 | Hosting | Vercel (free `*.vercel.app` subdomain for now) |
 
 No component library, no state manager, no second ORM, no third-party auth provider.
-Keep the dependency list short — it is currently Drizzle, Neon, Zod, Resend, and `pg`
-for scripts and tests.
+Keep the dependency list short — it is currently Drizzle, `pg`, Zod and Resend.
 
 **Passwords** use `scrypt` from `node:crypto` (`src/lib/password.ts`), not bcrypt or
 argon2, to avoid a native dependency.
 
-## Two database clients
+## Database client
 
-- `src/db/index.ts` — Neon **HTTP** driver. This is what the deployed app uses.
-  It cannot run interactive transactions; see the concurrency note below.
-- `src/db/node-client.ts` — **TCP** driver (`pg`), used only by the seed script and the
-  test suite. It also talks to a plain local Postgres, so tests need no network.
+`src/db/client.ts` builds a Drizzle client over a **node-postgres** pool;
+`src/db/index.ts` exports the app's cached singleton, and the seed and tests build their
+own with `createDb()`.
 
-Both are Drizzle over the same schema, so queries are written once.
+We use the TCP driver rather than Neon's HTTP driver because it supports interactive
+transactions — the booking insert needs to write the booking and its `booking_events`
+row atomically — and because it speaks to any Postgres, so the seed and the availability
+tests run against a local cluster with no network. Neon accepts ordinary Postgres
+connections on its pooled (`-pooler`) endpoint, which is what the deployed app uses.
 
 ## Data model notes
 
@@ -94,8 +96,9 @@ lowest free seat and only ever where `slot_index < sessions.online_capacity`. Th
 of a race fails on the index, not on a read-then-write check that could interleave.
 Cancelled bookings drop out of the index and release their seat.
 
-This is why the HTTP driver's lack of interactive transactions is acceptable: the
-invariant lives in the database, not in a transaction.
+The booking insert still runs in a transaction so the booking and its `booking_events`
+row land together, but correctness under concurrency does not depend on that — the
+invariant lives in the index.
 
 ## Availability rules
 
@@ -154,3 +157,17 @@ Environment variables are documented in `.env.example`. Never commit a real one.
   clinic scheduling rules, which come from the client, not from us.**
 - The seeded content (address, phone numbers, doctor names, prices, session times) is
   plausible placeholder data for demos. All of it needs client confirmation before launch.
+
+## Public site conventions
+
+- Public pages are prerendered and revalidated (`export const revalidate`), so a visitor
+  on mobile data gets static HTML. Admin pages will be dynamic.
+- **No web font is loaded.** The system font stack costs zero bytes; the audience is on
+  low-end Android over mobile data.
+- The palette is light-only and every text pair is checked against WCAG AA (4.5:1).
+- Every page renders and every form submits **with JavaScript disabled** — server
+  actions progressively enhance. Do not regress this.
+- Queries live in `src/lib/queries.ts`, wrapped in React `cache`. Pages do not query the
+  database directly.
+- `/book` is currently a placeholder pointing at the phone number. Milestone 4 replaces
+  it wholesale.

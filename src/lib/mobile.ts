@@ -28,3 +28,15 @@ export function formatMobile(canonical: string): string {
   const local = `0${canonical.slice(3)}`;
   return `${local.slice(0, 4)} ${local.slice(4, 7)} ${local.slice(7)}`;
 }
+
+/**
+ * Turns a displayed Philippine phone number into a `tel:` href.
+ * "(043) 702 1234" -> "tel:+63437021234";  "0917 800 1234" -> "tel:+639178001234".
+ */
+export function telHref(display: string): string {
+  const digits = display.replace(/[^\d+]/g, '');
+  if (digits.startsWith('+')) return `tel:${digits}`;
+  if (digits.startsWith('63')) return `tel:+${digits}`;
+  if (digits.startsWith('0')) return `tel:+63${digits.slice(1)}`;
+  return `tel:${digits}`;
+}
