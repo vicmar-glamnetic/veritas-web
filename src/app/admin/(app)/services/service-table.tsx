@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 
-import { saveService } from '../crud-actions';
+import { deleteService, saveService } from '../crud-actions';
+import { DeleteZone } from '../row-dialog';
 import { Button, Checkbox, Field, Input, Select, Textarea } from '../ui';
 
 export type ServiceRow = {
@@ -151,13 +152,35 @@ export function ServiceTable({ rows }: { rows: ServiceRow[] }) {
 
       <dialog
         ref={dialogRef}
-        onClose={() => setEditing(null)}
+        // See RowDialog: React bubbles onClose, so a nested confirmation closing would
+        // otherwise close this dialog too.
+        onClose={(event) => {
+          if (event.target === dialogRef.current) setEditing(null);
+        }}
         aria-labelledby="service-dialog-title"
         className="m-auto w-[min(44rem,calc(100vw-2rem))] rounded border border-line-strong bg-surface p-0 text-ink-900 shadow-xl backdrop:bg-ink-900/50"
       >
         {editing ? (
           // Re-keyed per row so the browser resets the defaults when you switch rows.
-          <ServiceForm key={current?.id ?? 'new'} row={current} onCancel={() => setEditing(null)} />
+          <div key={current?.id ?? 'new'} className="max-h-[85vh] overflow-y-auto p-6">
+            <ServiceForm row={current} onCancel={() => setEditing(null)} />
+            {current ? (
+              <DeleteZone
+                action={deleteService}
+                id={current.id}
+                formId={`delete-service-${current.id}`}
+                label="Delete service"
+                title={`Delete ${current.name}?`}
+                warning={
+                  <p className="text-sm leading-relaxed text-ink-700">
+                    This removes {current.name} from the price list for good. It is refused
+                    if the service appears on any booking, because that would break the
+                    record.
+                  </p>
+                }
+              />
+            ) : null}
+          </div>
         ) : null}
       </dialog>
     </div>
@@ -166,7 +189,7 @@ export function ServiceTable({ rows }: { rows: ServiceRow[] }) {
 
 function ServiceForm({ row, onCancel }: { row: ServiceRow | null; onCancel: () => void }) {
   return (
-    <form action={saveService} className="max-h-[85vh] overflow-y-auto p-6">
+    <form action={saveService}>
       <h2 id="service-dialog-title" className="font-serif text-xl text-ink-900">
         {row ? row.name : 'Add a service'}
       </h2>

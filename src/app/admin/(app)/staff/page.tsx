@@ -8,7 +8,8 @@ import { staffUsers } from '@/db/schema';
 import { requireAdmin } from '@/lib/auth';
 import { formatManilaDateTime } from '@/lib/time';
 
-import { saveStaff } from '../crud-actions';
+import { deleteStaff, saveStaff } from '../crud-actions';
+import { DeleteZone, RowDialog } from '../row-dialog';
 import { Button, Checkbox, Field, Flash, Input, PageTitle, Panel, Select } from '../ui';
 
 export const metadata: Metadata = { title: 'Staff users' };
@@ -33,58 +34,26 @@ export default async function StaffPage({
         lead="Admin accounts can change settings and manage staff. Reception accounts can do everything else. Deactivating someone signs them out immediately."
         actions={
           !showForm ? (
-            <Link
+            <RowDialog
               href="/admin/staff?new=1"
-              className="inline-flex min-h-[2.5rem] items-center rounded border border-brand-700 bg-brand-700 px-4 text-sm font-semibold text-white hover:bg-brand-800"
+              title="Add a staff member"
+              trigger="Add a staff member"
+              triggerClassName="inline-flex min-h-[2.5rem] items-center rounded border border-brand-700 bg-brand-700 px-4 text-sm font-semibold text-white hover:bg-brand-800"
             >
-              Add a staff member
-            </Link>
+              <StaffForm />
+            </RowDialog>
           ) : undefined
         }
       />
 
       {showForm ? (
         <Panel title={editing ? `Editing ${editing.name}` : 'Add a staff member'}>
-          <form action={saveStaff} className="grid gap-4 sm:grid-cols-2">
-            {editing ? <input type="hidden" name="id" value={editing.id} /> : null}
-            <Field label="Name">
-              <Input name="name" defaultValue={editing?.name ?? ''} required maxLength={120} />
-            </Field>
-            <Field label="Email address" hint="This is what they sign in with.">
-              <Input name="email" type="email" defaultValue={editing?.email ?? ''} required maxLength={200} />
-            </Field>
-            <Field label="Role">
-              <Select name="role" defaultValue={editing?.role ?? 'reception'}>
-                <option value="reception">Reception</option>
-                <option value="admin">Admin</option>
-              </Select>
-            </Field>
-            <Field
-              label="Password"
-              hint={editing ? 'Leave blank to keep the current one. At least 10 characters.' : 'At least 10 characters.'}
-            >
-              <Input
-                name="password"
-                type="password"
-                autoComplete="new-password"
-                required={!editing}
-                minLength={editing ? undefined : 10}
-                maxLength={200}
-              />
-            </Field>
-            <div className="flex flex-wrap items-center justify-between gap-4 sm:col-span-2">
-              <Checkbox name="isActive" label="Active" defaultChecked={editing?.isActive ?? true} />
-              <div className="flex gap-2">
-                <Link
-                  href="/admin/staff"
-                  className="inline-flex min-h-[2.5rem] items-center rounded border border-line-strong bg-surface px-4 text-sm font-semibold text-ink-900 hover:bg-surface-sunken"
-                >
-                  Cancel
-                </Link>
-                <Button type="submit">{editing ? 'Save changes' : 'Add staff member'}</Button>
-              </div>
-            </div>
-          </form>
+          <StaffForm user={editing} />
+          <p className="mt-4 text-sm">
+            <Link href="/admin/staff" className="text-brand-700 underline underline-offset-4">
+              Back to the list
+            </Link>
+          </p>
         </Panel>
       ) : null}
 
@@ -109,15 +78,75 @@ export default async function StaffPage({
                 {user.lastLoginAt ? `Last signed in ${formatManilaDateTime(user.lastLoginAt)}` : 'Never signed in'}
               </p>
             </div>
-            <Link
+            <RowDialog
               href={`/admin/staff?edit=${user.id}`}
-              className="text-sm font-semibold text-brand-700 underline underline-offset-4"
+              title={`Editing ${user.name}`}
+              trigger="Edit"
+              triggerClassName="rounded border border-line-strong px-3 py-1.5 text-sm font-semibold text-ink-900 hover:border-brand-400 hover:bg-brand-50"
             >
-              Edit
-            </Link>
+              <StaffForm user={user} />
+              {user.id !== me.id ? (
+                <DeleteZone
+                  action={deleteStaff}
+                  id={user.id}
+                  formId={`delete-staff-${user.id}`}
+                  label="Delete account"
+                  title={`Delete ${user.name}?`}
+                  warning={
+                    <p className="text-sm leading-relaxed text-ink-700">
+                      This removes the account entirely. It is refused if they have ever
+                      changed a booking, because their name is on that history.
+                    </p>
+                  }
+                />
+              ) : null}
+            </RowDialog>
           </li>
         ))}
       </ul>
     </div>
+  );
+}
+
+/** Shared by the dialog and the no-JavaScript fallback panel. */
+function StaffForm({ user }: { user?: typeof staffUsers.$inferSelect }) {
+  return (
+    <form action={saveStaff} className="grid gap-4 sm:grid-cols-2">
+      {user ? <input type="hidden" name="id" value={user.id} /> : null}
+      <Field label="Name">
+        <Input name="name" defaultValue={user?.name ?? ''} required maxLength={120} />
+      </Field>
+      <Field label="Email address" hint="This is what they sign in with.">
+        <Input name="email" type="email" defaultValue={user?.email ?? ''} required maxLength={200} />
+      </Field>
+      <Field label="Role">
+        <Select name="role" defaultValue={user?.role ?? 'reception'}>
+          <option value="reception">Reception</option>
+          <option value="admin">Admin</option>
+        </Select>
+      </Field>
+      <Field
+        label="Password"
+        hint={user ? 'Leave blank to keep the current one. At least 10 characters.' : 'At least 10 characters.'}
+      >
+        <Input
+          name="password"
+          type="password"
+          autoComplete="new-password"
+          required={!user}
+          minLength={user ? undefined : 10}
+          maxLength={200}
+        />
+      </Field>
+      <div className="flex flex-wrap items-center justify-between gap-4 sm:col-span-2">
+        <Checkbox name="isActive" label="Active" defaultChecked={user?.isActive ?? true} />
+        <Button type="submit">{user ? 'Save changes' : 'Add staff member'}</Button>
+      </div>
+      {user?.isActive ? (
+        <p className="text-xs text-ink-500 sm:col-span-2">
+          Unticking Active signs this person out straight away and stops them signing back in.
+        </p>
+      ) : null}
+    </form>
   );
 }

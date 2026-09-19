@@ -6,6 +6,10 @@
  * This adds a realistic morning: one already arrived, the rest still expected, one with
  * a note from the patient.
  *
+ * Re-running it clears the bookings it made before, so the screen looks the same every
+ * time. Without that, each run piled four more on top and left earlier ones marked
+ * arrived, which made the screen impossible to demo twice or to test against.
+ *
  *   npm run db:demo-today
  */
 import { config } from 'dotenv';
@@ -17,6 +21,27 @@ const { generateCancelToken } = await import('@/lib/reference');
 
 const { pool } = createDb();
 const today = manilaDateString();
+
+const DEMO_MOBILE_PREFIX = '+63917555099';
+
+/**
+ * Everything this script and the browser tests create uses Resend's simulator address,
+ * which no real patient would ever have. That is the safe handle for clearing up: it
+ * cannot match a genuine booking. booking_events cascade with the bookings.
+ */
+const DEMO_EMAIL = 'delivered@resend.dev';
+
+const previous = await pool.query(
+  `delete from bookings b using patients p
+    where p.id = b.patient_id and p.email = $1`,
+  [DEMO_EMAIL],
+);
+await pool.query(
+  `delete from patients p where p.email = $1
+     and not exists (select 1 from bookings b where b.patient_id = p.id)`,
+  [DEMO_EMAIL],
+);
+if (previous.rowCount) console.log(`Cleared ${previous.rowCount} booking(s) from earlier runs.`);
 
 const session = (
   await pool.query(
@@ -58,7 +83,7 @@ for (const [i, person] of people.entries()) {
     await pool.query(
       `insert into patients (full_name, mobile, email, source)
        values ($1, $2, 'delivered@resend.dev', 'online') returning id`,
-      [person.name, `+63917555${String(900 + i).padStart(4, '0')}`],
+      [person.name, `${DEMO_MOBILE_PREFIX}${i}`],
     )
   ).rows[0];
 

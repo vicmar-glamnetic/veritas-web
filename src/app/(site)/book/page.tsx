@@ -119,7 +119,8 @@ export default async function BookPage({
     });
   }
 
-  const availableDates = new Set(days.map((d) => d.date));
+  // Date -> places left, so the calendar can show how busy each day is.
+  const available = new Map(days.map((d) => [d.date, d.openCount]));
   // The earliest bookable slot, offered as a one-tap shortcut: most patients want the
   // first thing going rather than a particular date.
   const soonest = days[0]?.slots[0] ?? null;
@@ -243,8 +244,9 @@ export default async function BookPage({
                   <Calendar
                     from={manilaDateString()}
                     days={settings.bookingHorizonDays}
-                    availableDates={availableDates}
+                    available={available}
                     selected={params.date}
+                    today={manilaDateString()}
                     hrefFor={(date) => `${buildHref({ ...base, date })}#times`}
                   />
 

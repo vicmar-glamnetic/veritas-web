@@ -1,17 +1,20 @@
 'use server';
 
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 
 import { db } from '@/db';
 import {
+  bookingEvents,
+  bookings,
   doctors,
   promos,
   sessionBlackouts,
   services,
   sessions,
   siteSettings,
+  staffSessions,
   staffUsers,
 } from '@/db/schema';
 import { requireAdmin, requireStaff, revokeAllSessions } from '@/lib/auth';
@@ -199,4 +202,132 @@ export async function saveStaff(formData: FormData): Promise<void> {
   }
 
   back('/admin/staff', id ? 'Staff member updated.' : 'Staff member added.');
+}
+
+/* -------------------------------------------------------------------------- */
+/* Deleting                                                                   */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Deleting is allowed, but never at the cost of the record.
+ *
+ * `bookings` points at doctors, services and sessions with `on delete restrict`, and
+ * that is deliberate: a booking is a clinical record, and a row that quietly rewrites
+ * last month's appointments is worse than a list with an inactive entry in it. So each
+ * delete first counts what depends on the row. If anything does, it refuses and says to
+ * deactivate instead, which achieves what the person actually wanted: it disappears from
+ * the website and the booking form.
+ *
+ * Things nothing depends on, like a finished promo, delete outright.
+ */
+async function countDependents(
+  table: 'doctor' | 'service' | 'session',
+  id: string,
+): Promise<number> {
+  const column = { doctor: bookings.doctorId, service: bookings.serviceId, session: bookings.sessionId }[table];
+  const [row] = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(bookings)
+    .where(eq(column, id));
+  return row?.n ?? 0;
+}
+
+export async function deleteDoctor(formData: FormData): Promise<void> {
+  await requireStaff();
+  const id = String(formData.get('id') ?? '');
+  if (!id) back('/admin/doctors', 'Nothing to delete.', true);
+
+  const used = await countDependents('doctor', id);
+  if (used > 0) {
+    back(
+      '/admin/doctors',
+      `This doctor is on ${used} booking${used === 1 ? '' : 's'}, so deleting would break the record. Untick Active instead to take them off the website and the booking form.`,
+      true,
+    );
+  }
+
+  // Their sessions have no bookings either, so clear them out with the doctor.
+  await db.delete(sessions).where(eq(sessions.doctorId, id));
+  await db.delete(doctors).where(eq(doctors.id, id));
+
+  refreshPublic('/doctors', '/', '/book');
+  back('/admin/doctors', 'Doctor deleted.');
+}
+
+export async function deleteService(formData: FormData): Promise<void> {
+  await requireStaff();
+  const id = String(formData.get('id') ?? '');
+  if (!id) back('/admin/services', 'Nothing to delete.', true);
+
+  const used = await countDependents('service', id);
+  if (used > 0) {
+    back(
+      '/admin/services',
+      `This service is on ${used} booking${used === 1 ? '' : 's'}, so deleting would break the record. Untick Active instead to take it off the website and the booking form.`,
+      true,
+    );
+  }
+
+  await db.delete(services).where(eq(services.id, id));
+  refreshPublic('/prices', '/services', '/book');
+  back('/admin/services', 'Service deleted.');
+}
+
+export async function deleteSession(formData: FormData): Promise<void> {
+  await requireStaff();
+  const id = String(formData.get('id') ?? '');
+  if (!id) back('/admin/schedules', 'Nothing to delete.', true);
+
+  const used = await countDependents('session', id);
+  if (used > 0) {
+    back(
+      '/admin/schedules',
+      `This session has ${used} booking${used === 1 ? '' : 's'} against it, so deleting would break the record. Untick Active instead to stop it being offered.`,
+      true,
+    );
+  }
+
+  await db.delete(sessions).where(eq(sessions.id, id));
+  refreshPublic('/doctors', '/book');
+  back('/admin/schedules', 'Session deleted.');
+}
+
+export async function deletePromo(formData: FormData): Promise<void> {
+  await requireStaff();
+  const id = String(formData.get('id') ?? '');
+  if (!id) back('/admin/promos', 'Nothing to delete.', true);
+
+  // Nothing points at a promo, so this one is a plain delete.
+  await db.delete(promos).where(eq(promos.id, id));
+  refreshPublic('/promos', '/');
+  back('/admin/promos', 'Promo deleted.');
+}
+
+export async function deleteStaff(formData: FormData): Promise<void> {
+  const me = await requireAdmin();
+  const id = String(formData.get('id') ?? '');
+  if (!id) back('/admin/staff', 'Nothing to delete.', true);
+
+  if (id === me.id) {
+    back('/admin/staff', 'You cannot delete your own account while signed in.', true);
+  }
+
+  // Every status change is stamped with who made it. Deleting someone who has worked the
+  // desk would erase their name from that history, so keep them and deactivate instead.
+  const [acted] = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(bookingEvents)
+    .where(eq(bookingEvents.actorStaffUserId, id));
+
+  if ((acted?.n ?? 0) > 0) {
+    back(
+      '/admin/staff',
+      `This person has made ${acted.n} change${acted.n === 1 ? '' : 's'} to bookings, and deleting them would take their name off that history. Untick Active instead, which signs them out and stops them signing back in.`,
+      true,
+    );
+  }
+
+  await db.delete(staffSessions).where(eq(staffSessions.staffUserId, id));
+  await db.delete(staffUsers).where(eq(staffUsers.id, id));
+  back('/admin/staff', 'Staff member deleted.');
 }

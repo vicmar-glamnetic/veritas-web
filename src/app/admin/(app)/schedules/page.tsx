@@ -11,6 +11,8 @@ import { DAY_NAMES, formatManilaTime, formatWallClock, manilaDateString } from '
 import { slotStartTimes, distributeOnlineCapacity } from '@/lib/availability';
 
 import { addBlackout, removeBlackout, saveSession } from '../crud-actions';
+import { ConfirmDeleteButton } from '../row-dialog';
+import { SessionTable } from './session-table';
 import { Button, Checkbox, Field, Flash, Input, PageTitle, Panel, Select } from '../ui';
 
 export const metadata: Metadata = { title: 'Schedules' };
@@ -19,10 +21,11 @@ export const dynamic = 'force-dynamic';
 export default async function SchedulesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ done?: string; error?: string; edit?: string }>;
+  searchParams: Promise<{ done?: string; error?: string; edit?: string; new?: string }>;
 }) {
   await requireStaff();
-  const { done, error, edit } = await searchParams;
+  const { done, error, edit, new: isNewParam } = await searchParams;
+  const isNew = isNewParam === '1';
   const today = manilaDateString();
 
   const [sessionList, doctorList, blackouts] = await Promise.all([
@@ -56,118 +59,42 @@ export default async function SchedulesPage({
         lead="Sessions are the recurring weekly clinic times. The booking calendar is worked out from these, so there is no separate list of open slots to keep up to date."
       />
 
-      <Panel
-        title={editing ? 'Editing a session' : 'Add a session'}
-        description="Capacity is how many patients the whole session takes, not per slot. Online places are how many of those the website may give away; the rest are kept for walk-ins."
-      >
-        <form action={saveSession} className="grid gap-4 sm:grid-cols-3">
-          {editing ? <input type="hidden" name="id" value={editing.id} /> : null}
-          <Field label="Kind">
-            <Select name="serviceCategory" defaultValue={editing?.serviceCategory ?? 'consultation'}>
-              <option value="consultation">Consultation</option>
-              <option value="laboratory">Laboratory</option>
-              <option value="imaging">Imaging</option>
-            </Select>
-          </Field>
-          <Field label="Doctor" hint="Consultations only. Leave blank for lab and imaging.">
-            <Select name="doctorId" defaultValue={editing?.doctorId ?? ''}>
-              <option value="">No doctor</option>
-              {doctorList.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.fullName}
-                </option>
-              ))}
-            </Select>
-          </Field>
-          <Field label="Day">
-            <Select name="dayOfWeek" defaultValue={String(editing?.dayOfWeek ?? 1)}>
-              {DAY_NAMES.map((day, i) => (
-                <option key={day} value={i}>
-                  {day}
-                </option>
-              ))}
-            </Select>
-          </Field>
-          <Field label="Starts">
-            <Input name="startTime" type="time" defaultValue={(editing?.startTime ?? '09:00:00').slice(0, 5)} required />
-          </Field>
-          <Field label="Ends">
-            <Input name="endTime" type="time" defaultValue={(editing?.endTime ?? '12:00:00').slice(0, 5)} required />
-          </Field>
-          <Field label="Slot length (minutes)">
-            <Input name="slotMinutes" type="number" min={5} max={240} defaultValue={editing?.slotMinutes ?? 20} required />
-          </Field>
-          <Field label="Total patients">
-            <Input name="capacity" type="number" min={1} max={500} defaultValue={editing?.capacity ?? 9} required />
-          </Field>
-          <Field label="Of those, bookable online">
-            <Input name="onlineCapacity" type="number" min={0} max={500} defaultValue={editing?.onlineCapacity ?? 6} required />
-          </Field>
-          <Field label="Cut-off (hours before)" hint="Online booking closes this long before the slot.">
-            <Input name="bookingCutoffHours" type="number" min={0} max={336} defaultValue={editing?.bookingCutoffHours ?? 2} required />
-          </Field>
-          <div className="flex items-end">
-            <Checkbox name="isActive" label="Active" defaultChecked={editing?.isActive ?? true} />
-          </div>
-          <div className="flex gap-2 sm:col-span-3">
-            <Button type="submit">{editing ? 'Save session' : 'Add session'}</Button>
-            {editing ? (
-              <a href="/admin/schedules" className="inline-flex min-h-[2.5rem] items-center rounded border border-line-strong bg-surface px-4 text-sm font-semibold text-ink-900 hover:bg-surface-sunken">
-                Cancel
-              </a>
-            ) : null}
-          </div>
-        </form>
-      </Panel>
+      {editing || isNew ? (
+        <Panel
+          title={editing ? 'Editing a session' : 'Add a session'}
+          description="Capacity is how many patients the whole session takes, not per slot. Online places are how many of those the website may give away; the rest are kept for walk-ins."
+        >
+          <SessionForm session={editing} doctors={doctorList} />
+        </Panel>
+      ) : null}
 
-      <div className="overflow-hidden rounded border border-line bg-surface">
-        <table className="w-full text-sm">
-          <thead className="border-b border-line bg-surface-sunken text-left">
-            <tr>
-              <th scope="col" className="px-4 py-2.5 font-semibold">Day</th>
-              <th scope="col" className="px-4 py-2.5 font-semibold">Time</th>
-              <th scope="col" className="px-4 py-2.5 font-semibold">Who / what</th>
-              <th scope="col" className="px-4 py-2.5 font-semibold">Slots</th>
-              <th scope="col" className="px-4 py-2.5 font-semibold">Online / total</th>
-              <th scope="col" className="px-4 py-2.5"><span className="sr-only">Edit</span></th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-line">
-            {sessionList.map((s) => {
-              const slots = slotStartTimes(s.startTime, s.endTime, s.slotMinutes);
-              const spread = distributeOnlineCapacity(s.onlineCapacity, slots.length);
-              const bookableSlots = spread.filter((n) => n > 0).length;
-              return (
-                <tr key={s.id} className={s.isActive ? '' : 'opacity-50'}>
-                  <td className="px-4 py-2.5">{DAY_NAMES[s.dayOfWeek]}</td>
-                  <td className="px-4 py-2.5 tabular-nums">
-                    {formatWallClock(s.startTime)} to {formatWallClock(s.endTime)}
-                  </td>
-                  <td className="px-4 py-2.5">
-                    {s.doctorId ? doctorName.get(s.doctorId) ?? 'Unknown doctor' : null}
-                    <span className="text-ink-500 capitalize">
-                      {s.doctorId ? ` · ${s.serviceCategory}` : s.serviceCategory}
-                    </span>
-                    {!s.isActive ? <span className="ml-2 text-xs text-ink-400">(inactive)</span> : null}
-                  </td>
-                  <td className="px-4 py-2.5 text-ink-500 tabular-nums">
-                    {slots.length} × {s.slotMinutes}m
-                    <span className="ml-1 text-xs text-ink-400">({bookableSlots} offered)</span>
-                  </td>
-                  <td className="px-4 py-2.5 tabular-nums">
-                    {s.onlineCapacity} / {s.capacity}
-                  </td>
-                  <td className="px-4 py-2.5 text-right">
-                    <a href={`/admin/schedules?edit=${s.id}`} className="font-semibold text-brand-700 underline underline-offset-4">
-                      Edit
-                    </a>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+      <SessionTable
+        dayNames={DAY_NAMES}
+        doctors={doctorList.map((d) => ({ id: d.id, fullName: d.fullName }))}
+        rows={sessionList.map((s) => {
+          const slots = slotStartTimes(s.startTime, s.endTime, s.slotMinutes);
+          const spread = distributeOnlineCapacity(s.onlineCapacity, slots.length);
+          return {
+            id: s.id,
+            doctorId: s.doctorId,
+            doctorName: s.doctorId ? (doctorName.get(s.doctorId) ?? 'Unknown doctor') : null,
+            serviceCategory: s.serviceCategory,
+            dayOfWeek: s.dayOfWeek,
+            dayName: DAY_NAMES[s.dayOfWeek],
+            startTime: s.startTime,
+            endTime: s.endTime,
+            startLabel: formatWallClock(s.startTime),
+            endLabel: formatWallClock(s.endTime),
+            slotMinutes: s.slotMinutes,
+            slotCount: slots.length,
+            offeredSlots: spread.filter((n) => n > 0).length,
+            capacity: s.capacity,
+            onlineCapacity: s.onlineCapacity,
+            bookingCutoffHours: s.bookingCutoffHours,
+            isActive: s.isActive,
+          };
+        })}
+      />
 
       <Panel
         title="Closed days"
@@ -223,11 +150,31 @@ export default async function SchedulesPage({
                       </p>
                       <p className="mt-0.5 text-sm text-ink-500">{b.reason}</p>
                     </div>
-                    <form action={removeBlackout}>
+                    <form action={removeBlackout} id={`blackout-${b.id}`}>
                       <input type="hidden" name="id" value={b.id} />
-                      <Button type="submit" tone="danger">
-                        Remove
-                      </Button>
+                      <ConfirmDeleteButton
+                        formId={`blackout-${b.id}`}
+                        label="Remove"
+                        title="Remove this closed day?"
+                        confirmLabel="Yes, remove it"
+                      >
+                        <p className="text-sm leading-relaxed text-ink-700">
+                          {b.date} will be bookable again
+                          {b.sessionId
+                            ? ' for that session'
+                            : b.doctorId
+                              ? ` for ${doctorName.get(b.doctorId) ?? 'that doctor'}`
+                              : ' across the whole clinic'}
+                          .
+                        </p>
+                        {hit.length > 0 ? (
+                          <p className="mt-3 text-sm leading-relaxed text-ink-500">
+                            {hit.length} {hit.length === 1 ? 'patient was' : 'patients were'} listed
+                            as needing a call about this closure. Make sure they have been told
+                            before you remove it.
+                          </p>
+                        ) : null}
+                      </ConfirmDeleteButton>
                     </form>
                   </div>
 
@@ -266,5 +213,72 @@ export default async function SchedulesPage({
         )}
       </Panel>
     </div>
+  );
+}
+
+
+/** Shared by the edit dialog and the no-JavaScript fallback panel. */
+function SessionForm({
+  session,
+  doctors,
+}: {
+  session?: typeof sessions.$inferSelect;
+  doctors: { id: string; fullName: string }[];
+}) {
+  return (
+<form action={saveSession} className="grid gap-4 sm:grid-cols-3">
+          {session ? <input type="hidden" name="id" value={session.id} /> : null}
+          <Field label="Kind">
+            <Select name="serviceCategory" defaultValue={session?.serviceCategory ?? 'consultation'}>
+              <option value="consultation">Consultation</option>
+              <option value="laboratory">Laboratory</option>
+              <option value="imaging">Imaging</option>
+            </Select>
+          </Field>
+          <Field label="Doctor" hint="Consultations only. Leave blank for lab and imaging.">
+            <Select name="doctorId" defaultValue={session?.doctorId ?? ''}>
+              <option value="">No doctor</option>
+              {doctors.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.fullName}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <Field label="Day">
+            <Select name="dayOfWeek" defaultValue={String(session?.dayOfWeek ?? 1)}>
+              {DAY_NAMES.map((day, i) => (
+                <option key={day} value={i}>
+                  {day}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <Field label="Starts">
+            <Input name="startTime" type="time" defaultValue={(session?.startTime ?? '09:00:00').slice(0, 5)} required />
+          </Field>
+          <Field label="Ends">
+            <Input name="endTime" type="time" defaultValue={(session?.endTime ?? '12:00:00').slice(0, 5)} required />
+          </Field>
+          <Field label="Slot length (minutes)">
+            <Input name="slotMinutes" type="number" min={5} max={240} defaultValue={session?.slotMinutes ?? 20} required />
+          </Field>
+          <Field label="Total patients">
+            <Input name="capacity" type="number" min={1} max={500} defaultValue={session?.capacity ?? 9} required />
+          </Field>
+          <Field label="Of those, bookable online">
+            <Input name="onlineCapacity" type="number" min={0} max={500} defaultValue={session?.onlineCapacity ?? 6} required />
+          </Field>
+          <Field label="Cut-off (hours before)" hint="Online booking closes this long before the slot.">
+            <Input name="bookingCutoffHours" type="number" min={0} max={336} defaultValue={session?.bookingCutoffHours ?? 2} required />
+          </Field>
+          <div className="flex items-end">
+            <Checkbox name="isActive" label="Active" defaultChecked={session?.isActive ?? true} />
+          </div>
+          <div className="flex gap-2 sm:col-span-3">
+            <Button type="submit">{session ? 'Save session' : 'Add session'}</Button>
+
+          </div>
+        </form>
   );
 }

@@ -235,6 +235,19 @@ the page guard alone secures nothing.
   is `.nullish()` for exactly that reason. Listing `z.undefined()` inside a union is not
   enough: the field stays required, and unticking any box failed every admin save with
   "expected nonoptional, received undefined". Covered by `schemas.test.ts`.
+- **Deleting is offered everywhere but never at the cost of a record.** `bookings` points
+  at doctors, services and sessions with `on delete restrict`, deliberately. Each delete
+  counts what depends on the row first and, if anything does, refuses and tells staff to
+  untick Active instead, which is what they actually wanted. Staff who have changed a
+  booking cannot be deleted either, because their name is on that history. A promo,
+  which nothing references, deletes outright.
+- **Long lists get one shared dialog; short ones get a dialog per row.** Giving all
+  thirty sessions their own dialog put 525KB and 442 inputs into `/admin/schedules`;
+  the shared-dialog version is 81KB. Services and schedules share one dialog re-keyed per
+  row; doctors, staff and promos have few enough rows to nest one each.
+- **React bubbles `onClose` on `<dialog>`.** Every dialog's handler checks
+  `event.target === dialogRef.current`, or a nested delete confirmation closing tears
+  down the edit dialog around it and loses whatever was typed.
 - **Editing opens a dialog, and `?edit=<id>` still works.** The Edit control is a real
   link; the click handler only takes over when a native `<dialog>` exists, and the server
   renders the same form inline for the no-JavaScript path. Clicking Edit on the thirtieth
@@ -300,6 +313,10 @@ npm run test:unit     # pure functions only, no database
 npm run db:clear-limits   # reset the rate-limit counters
 npm run db:demo-today     # put a few bookings on today, so Today is not empty
 ```
+
+`db:demo-today` clears what it made last time, so the screen looks the same on every run.
+It finds its own rows by Resend's simulator address, `delivered@resend.dev`, which no
+real patient would have.
 
 Repeated browser runs exhaust the login rate limit (10 per IP per hour) and every later
 sign-in then fails with a message that looks nothing like a rate limit. Run

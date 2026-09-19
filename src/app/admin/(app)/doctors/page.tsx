@@ -7,7 +7,8 @@ import { db } from '@/db';
 import { doctors } from '@/db/schema';
 import { requireStaff } from '@/lib/auth';
 
-import { saveDoctor } from '../crud-actions';
+import { deleteDoctor, saveDoctor } from '../crud-actions';
+import { DeleteZone, RowDialog } from '../row-dialog';
 import { Button, Checkbox, Field, Flash, Input, PageTitle, Panel, Textarea } from '../ui';
 
 export const metadata: Metadata = { title: 'Doctors' };
@@ -38,48 +39,26 @@ export default async function DoctorsAdminPage({
         lead="Doctors are never deleted, because bookings point at them. Untick Active to take someone off the website and out of the booking form."
         actions={
           !showForm ? (
-            <Link
+            <RowDialog
               href="/admin/doctors?new=1"
-              className="inline-flex min-h-[2.5rem] items-center rounded border border-brand-700 bg-brand-700 px-4 text-sm font-semibold text-white hover:bg-brand-800"
+              title="Add a doctor"
+              trigger="Add a doctor"
+              triggerClassName="inline-flex min-h-[2.5rem] items-center rounded border border-brand-700 bg-brand-700 px-4 text-sm font-semibold text-white hover:bg-brand-800"
             >
-              Add a doctor
-            </Link>
+              <DoctorForm nextOrder={list.length + 1} />
+            </RowDialog>
           ) : undefined
         }
       />
 
       {showForm ? (
         <Panel title={editing ? `Editing ${editing.fullName}` : 'Add a doctor'}>
-          <form action={saveDoctor} className="grid gap-4 sm:grid-cols-2">
-            {editing ? <input type="hidden" name="id" value={editing.id} /> : null}
-            <Field label="Full name">
-              <Input name="fullName" defaultValue={editing?.fullName ?? ''} required maxLength={120} placeholder="Dra. Juana Dela Cruz" />
-            </Field>
-            <Field label="Specialty">
-              <Input name="specialty" defaultValue={editing?.specialty ?? ''} required maxLength={120} placeholder="Family Medicine" />
-            </Field>
-            <Field label="Short biography" className="sm:col-span-2">
-              <Textarea name="bio" defaultValue={editing?.bio ?? ''} rows={3} maxLength={1000} />
-            </Field>
-            <Field label="Photo URL" hint="Optional.">
-              <Input name="photoUrl" defaultValue={editing?.photoUrl ?? ''} maxLength={500} />
-            </Field>
-            <Field label="Order on the website">
-              <Input name="sortOrder" type="number" min={0} max={999} defaultValue={editing?.sortOrder ?? list.length + 1} />
-            </Field>
-            <div className="flex flex-wrap items-center justify-between gap-4 sm:col-span-2">
-              <Checkbox name="isActive" label="Active" defaultChecked={editing?.isActive ?? true} />
-              <div className="flex gap-2">
-                <Link
-                  href="/admin/doctors"
-                  className="inline-flex min-h-[2.5rem] items-center rounded border border-line-strong bg-surface px-4 text-sm font-semibold text-ink-900 hover:bg-surface-sunken"
-                >
-                  Cancel
-                </Link>
-                <Button type="submit">{editing ? 'Save changes' : 'Add doctor'}</Button>
-              </div>
-            </div>
-          </form>
+          <DoctorForm doctor={editing} nextOrder={list.length + 1} />
+          <p className="mt-4 text-sm">
+            <Link href="/admin/doctors" className="text-brand-700 underline underline-offset-4">
+              Back to the list
+            </Link>
+          </p>
         </Panel>
       ) : null}
 
@@ -100,15 +79,71 @@ export default async function DoctorsAdminPage({
               </p>
               <p className="text-sm text-ink-500">{doctor.specialty}</p>
             </div>
-            <Link
+            <RowDialog
               href={`/admin/doctors?edit=${doctor.id}`}
-              className="text-sm font-semibold text-brand-700 underline underline-offset-4"
+              title={`Editing ${doctor.fullName}`}
+              trigger="Edit"
+              triggerClassName="rounded border border-line-strong px-3 py-1.5 text-sm font-semibold text-ink-900 hover:border-brand-400 hover:bg-brand-50"
             >
-              Edit
-            </Link>
+              <DoctorForm doctor={doctor} nextOrder={list.length + 1} />
+              <DeleteZone
+                action={deleteDoctor}
+                id={doctor.id}
+                formId={`delete-doctor-${doctor.id}`}
+                label="Delete doctor"
+                title={`Delete ${doctor.fullName}?`}
+                warning={
+                  <p className="text-sm leading-relaxed text-ink-700">
+                    This removes {doctor.fullName} and any clinic sessions they hold. It is
+                    refused if they appear on any booking, because that would break the
+                    record.
+                  </p>
+                }
+              />
+            </RowDialog>
           </li>
         ))}
       </ul>
     </div>
+  );
+}
+
+/** Shared by the dialog and the no-JavaScript fallback panel. */
+function DoctorForm({
+  doctor,
+  nextOrder,
+}: {
+  doctor?: typeof doctors.$inferSelect;
+  nextOrder: number;
+}) {
+  return (
+    <form action={saveDoctor} className="grid gap-4 sm:grid-cols-2">
+      {doctor ? <input type="hidden" name="id" value={doctor.id} /> : null}
+      <Field label="Full name">
+        <Input name="fullName" defaultValue={doctor?.fullName ?? ''} required maxLength={120} placeholder="Dra. Juana Dela Cruz" />
+      </Field>
+      <Field label="Specialty">
+        <Input name="specialty" defaultValue={doctor?.specialty ?? ''} required maxLength={120} placeholder="Family Medicine" />
+      </Field>
+      <Field label="Short biography" className="sm:col-span-2">
+        <Textarea name="bio" defaultValue={doctor?.bio ?? ''} rows={3} maxLength={1000} />
+      </Field>
+      <Field label="Photo URL" hint="Optional.">
+        <Input name="photoUrl" defaultValue={doctor?.photoUrl ?? ''} maxLength={500} />
+      </Field>
+      <Field label="Order on the website">
+        <Input name="sortOrder" type="number" min={0} max={999} defaultValue={doctor?.sortOrder ?? nextOrder} />
+      </Field>
+      <div className="flex flex-wrap items-center justify-between gap-4 sm:col-span-2">
+        <Checkbox name="isActive" label="Active on the website" defaultChecked={doctor?.isActive ?? true} />
+        <Button type="submit">{doctor ? 'Save changes' : 'Add doctor'}</Button>
+      </div>
+      {doctor?.isActive ? (
+        <p className="text-xs text-ink-500 sm:col-span-2">
+          Unticking Active removes this doctor from the website and the booking form.
+          Existing bookings are not affected.
+        </p>
+      ) : null}
+    </form>
   );
 }
