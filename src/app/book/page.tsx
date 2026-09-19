@@ -46,6 +46,7 @@ export const metadata: Metadata = {
  */
 
 type SearchParams = {
+  kind?: string;
   service?: string;
   doctor?: string;
   date?: string;
@@ -53,11 +54,30 @@ type SearchParams = {
   start?: string;
 };
 
-const CATEGORY_HEADINGS = [
-  { key: 'consultation' as const, label: 'See a doctor' },
-  { key: 'laboratory' as const, label: 'Blood and urine tests' },
-  { key: 'imaging' as const, label: 'X-ray, ultrasound and heart tests' },
-];
+/**
+ * The first thing a patient picks is one of three, not one of thirty-eight. Dropping the
+ * whole price list on someone as step one is the fastest way to make them close the tab
+ * and ring instead.
+ */
+const KINDS = [
+  {
+    key: 'consultation' as const,
+    label: 'See a doctor',
+    blurb: 'A check-up, an illness, a medical certificate, or following up on your maintenance medicines.',
+  },
+  {
+    key: 'laboratory' as const,
+    label: 'Blood or urine test',
+    blurb: 'CBC, blood sugar, cholesterol, liver and kidney panels, thyroid, dengue and the rest.',
+  },
+  {
+    key: 'imaging' as const,
+    label: 'X-ray, scan or heart test',
+    blurb: 'Chest X-ray, ultrasound, 12-lead ECG and 2D echo.',
+  },
+] as const;
+
+const KIND_BY_KEY = new Map(KINDS.map((k) => [k.key as string, k]));
 
 function buildHref(params: SearchParams): string {
   const query = new URLSearchParams();
@@ -76,6 +96,7 @@ export default async function BookPage({
   const params = await searchParams;
   const settings = await getSiteSettings();
 
+  const kind = params.kind && KIND_BY_KEY.has(params.kind) ? params.kind : null;
   const service = params.service ? await getServiceById(params.service) : null;
   const bookable = service && service.isActive && service.isBookableOnline ? service : null;
   const needsDoctor = bookable?.category === 'consultation';
@@ -99,6 +120,10 @@ export default async function BookPage({
   }
 
   const availableDates = new Set(days.map((d) => d.date));
+  // The earliest bookable slot, offered as a one-tap shortcut: most patients want the
+  // first thing going rather than a particular date.
+  const soonest = days[0]?.slots[0] ?? null;
+  const soonestDate = days[0]?.date;
   const chosenDay = params.date ? days.find((d) => d.date === params.date) : undefined;
 
   /*
@@ -112,16 +137,30 @@ export default async function BookPage({
       : null;
 
   const base: SearchParams = {
+    kind: kind ?? undefined,
     service: bookable?.id,
     doctor: doctor?.id,
   };
+
+  // Which of the three sub-stages of step 1 to render.
+  const stepOneStage = !kind
+    ? 'kind'
+    : !bookable
+      ? 'service'
+      : needsDoctor && !doctor
+        ? 'doctor'
+        : 'done';
+
+  const currentStep = !stepOneDone ? 1 : !chosenSlot ? 2 : 3;
 
   return (
     <>
       <PageHeader
         title="Book an appointment"
         lead="Four short steps. Nothing to pay now, and we will email your reference code."
-      />
+      >
+        <ProgressBar current={currentStep} />
+      </PageHeader>
 
       <Container className="py-10">
         <ol className="space-y-2">
@@ -137,13 +176,16 @@ export default async function BookPage({
             }
             changeHref="/book"
           >
-            {!bookable ? (
-              <ServicePicker />
-            ) : needsDoctor && !doctor ? (
+            {stepOneStage === 'kind' ? (
+              <KindPicker />
+            ) : stepOneStage === 'service' ? (
+              <ServicePicker kind={kind!} />
+            ) : stepOneStage === 'doctor' ? (
               <DoctorPicker
-                serviceId={bookable.id}
+                kind={kind!}
+                serviceId={bookable!.id}
                 doctors={doctorOptions}
-                serviceName={bookable.name}
+                serviceName={bookable!.name}
               />
             ) : null}
           </Step>
@@ -173,17 +215,41 @@ export default async function BookPage({
                   </p>
                 </Callout>
               ) : (
-                <div className="space-y-6">
+                <div className="space-y-7">
+                  {soonest ? (
+                    <div className="flex flex-wrap items-center justify-between gap-3 rounded border border-brand-200 bg-brand-50 px-4 py-3.5">
+                      <div>
+                        <p className="text-xs font-semibold tracking-[0.14em] text-brand-700 uppercase">
+                          Soonest we can see you
+                        </p>
+                        <p className="mt-1 font-serif text-lg text-brand-900">
+                          {formatManilaDateTime(soonest.start)}
+                        </p>
+                      </div>
+                      <Link
+                        href={`${buildHref({
+                          ...base,
+                          date: soonestDate,
+                          session: soonest.sessionId,
+                          start: soonest.start.toISOString(),
+                        })}#your-details`}
+                        className="inline-flex min-h-[2.75rem] items-center justify-center rounded bg-brand-700 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-800"
+                      >
+                        Take this time
+                      </Link>
+                    </div>
+                  ) : null}
+
                   <Calendar
                     from={manilaDateString()}
                     days={settings.bookingHorizonDays}
                     availableDates={availableDates}
                     selected={params.date}
-                    hrefFor={(date) => buildHref({ ...base, date })}
+                    hrefFor={(date) => `${buildHref({ ...base, date })}#times`}
                   />
 
                   {chosenDay ? (
-                    <div>
+                    <div id="times" className="scroll-mt-32">
                       <h3 className="font-serif text-lg text-ink-900">
                         Times on {formatManilaDate(chosenDay.slots[0]!.start)}
                       </h3>
@@ -191,12 +257,12 @@ export default async function BookPage({
                         {chosenDay.slots.map((slot) => (
                           <li key={slot.start.toISOString()}>
                             <Link
-                              href={buildHref({
+                              href={`${buildHref({
                                 ...base,
                                 date: chosenDay.date,
                                 session: slot.sessionId,
                                 start: slot.start.toISOString(),
-                              })}
+                              })}#your-details`}
                               className="flex min-h-[3rem] items-center justify-center rounded border border-line-strong bg-surface px-2 text-sm font-semibold text-ink-900 hover:border-brand-400 hover:bg-brand-50"
                             >
                               {formatManilaTime(slot.start)}
@@ -218,6 +284,7 @@ export default async function BookPage({
           {/* ---------------- Steps 3 and 4: details, then confirm ---------------- */}
           <Step
             number={3}
+            id="your-details"
             title="Your details"
             disabled={!chosenSlot}
             changeHref={buildHref(base)}
@@ -274,6 +341,29 @@ export default async function BookPage({
 
 /* -------------------------------------------------------------------------- */
 
+/** "Step 2 of 4", plus a bar. Tells people how much is left, which is most of what
+ * makes a multi-step form feel short rather than endless. */
+function ProgressBar({ current }: { current: number }) {
+  const labels = ['What you need', 'When', 'Your details', 'Done'];
+  return (
+    <div className="mt-8 max-w-md">
+      <p className="text-xs font-semibold tracking-[0.14em] text-brand-700 uppercase">
+        Step {current} of 4 · {labels[current - 1]}
+      </p>
+      <ol className="mt-2.5 flex gap-1.5" aria-hidden="true">
+        {labels.map((label, i) => (
+          <li
+            key={label}
+            className={`h-1.5 flex-1 rounded-full ${
+              i < current ? 'bg-brand-700' : 'bg-line-strong'
+            }`}
+          />
+        ))}
+      </ol>
+    </div>
+  );
+}
+
 function Step({
   number,
   title,
@@ -283,6 +373,7 @@ function Step({
   summary,
   changeHref,
   hideChange,
+  id,
 }: {
   number: number;
   title: string;
@@ -292,17 +383,19 @@ function Step({
   summary?: string;
   changeHref: string;
   hideChange?: boolean;
+  id?: string;
 }) {
   return (
     <li
-      className={`border-t border-line-strong pt-5 ${disabled ? 'opacity-50' : ''}`}
+      id={id}
+      className={`scroll-mt-32 border-t border-line-strong pt-5 ${disabled ? 'opacity-50' : ''}`}
       aria-current={!disabled && !done ? 'step' : undefined}
     >
       <div className="flex items-baseline gap-4">
         <span
           aria-hidden="true"
           className={`w-6 shrink-0 font-serif text-lg ${
-            done ? 'text-brand-600' : 'text-brand-300'
+            done ? 'text-brand-600' : 'text-brand-400'
           }`}
         >
           {done ? '\u2713' : String(number).padStart(2, '0')}
@@ -330,49 +423,89 @@ function Step({
   );
 }
 
-async function ServicePicker() {
+function KindPicker() {
+  return (
+    <div>
+      <h3 className="text-xs font-semibold tracking-[0.14em] text-ink-400 uppercase">
+        What kind of visit?
+      </h3>
+      <ul className="mt-4 grid gap-3">
+        {KINDS.map((kind) => (
+          <li key={kind.key}>
+            <Link
+              href={buildHref({ kind: kind.key })}
+              className="group flex items-start gap-4 rounded border border-line-strong bg-surface p-4 hover:border-brand-400 hover:bg-brand-50"
+            >
+              <span className="min-w-0 flex-1">
+                <span className="block font-serif text-lg text-ink-900">{kind.label}</span>
+                <span className="mt-1 block text-sm leading-relaxed text-ink-500">
+                  {kind.blurb}
+                </span>
+              </span>
+              <span
+                aria-hidden="true"
+                className="mt-1 shrink-0 text-lg text-brand-400 group-hover:text-brand-700"
+              >
+                &rarr;
+              </span>
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+async function ServicePicker({ kind }: { kind: string }) {
   const services = await getBookableServices();
+  const items = services.filter((s) => s.category === kind);
+  const heading = KIND_BY_KEY.get(kind)?.label ?? 'Choose a service';
 
   return (
-    <div className="space-y-6">
-      {CATEGORY_HEADINGS.map((category) => {
-        const items = services.filter((s) => s.category === category.key);
-        if (items.length === 0) return null;
+    <div>
+      <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
+        <h3 className="text-xs font-semibold tracking-[0.14em] text-ink-400 uppercase">
+          {heading}: choose one
+        </h3>
+        <Link href="/book" className="text-sm text-brand-700 underline underline-offset-4">
+          Not this
+        </Link>
+      </div>
 
-        return (
-          <div key={category.key}>
-            <h3 className="text-xs font-semibold tracking-[0.14em] text-ink-400 uppercase">
-              {category.label}
-            </h3>
-            <ul className="mt-3 divide-y divide-line border-t border-line">
-              {items.map((item) => (
-                <li key={item.id}>
-                  <Link
-                    href={buildHref({ service: item.id })}
-                    className="flex min-h-[3.25rem] items-center justify-between gap-4 py-3 text-ink-900 hover:text-brand-700"
-                  >
-                    <span>{item.name}</span>
-                    {item.isListedOnline ? (
-                      <span className="shrink-0 text-sm font-semibold text-brand-700 tabular-nums">
-                        {formatPhp(item.pricePhp)}
-                      </span>
-                    ) : null}
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </div>
-        );
-      })}
+      {items.length === 0 ? (
+        <p className="mt-3 text-sm text-ink-500">
+          Nothing in this group can be booked online at the moment. Please ring the clinic.
+        </p>
+      ) : (
+        <ul className="mt-3 divide-y divide-line border-t border-line">
+          {items.map((item) => (
+            <li key={item.id}>
+              <Link
+                href={buildHref({ kind, service: item.id })}
+                className="flex min-h-[3.25rem] items-center justify-between gap-4 py-3 text-ink-900 hover:text-brand-700"
+              >
+                <span>{item.name}</span>
+                {item.isListedOnline ? (
+                  <span className="shrink-0 text-sm font-semibold text-brand-700 tabular-nums">
+                    {formatPhp(item.pricePhp)}
+                  </span>
+                ) : null}
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
 
 function DoctorPicker({
+  kind,
   serviceId,
   doctors,
   serviceName,
 }: {
+  kind: string;
   serviceId: string;
   doctors: { id: string; fullName: string; specialty: string }[];
   serviceName: string;
@@ -387,14 +520,22 @@ function DoctorPicker({
 
   return (
     <div>
-      <h3 className="text-xs font-semibold tracking-[0.14em] text-ink-400 uppercase">
-        Which doctor?
-      </h3>
+      <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
+        <h3 className="text-xs font-semibold tracking-[0.14em] text-ink-400 uppercase">
+          Which doctor?
+        </h3>
+        <Link
+          href={buildHref({ kind })}
+          className="text-sm text-brand-700 underline underline-offset-4"
+        >
+          Change service
+        </Link>
+      </div>
       <ul className="mt-3 divide-y divide-line border-t border-line">
         {doctors.map((doc) => (
           <li key={doc.id}>
             <Link
-              href={buildHref({ service: serviceId, doctor: doc.id })}
+              href={buildHref({ kind, service: serviceId, doctor: doc.id })}
               className="block py-3.5 hover:text-brand-700"
             >
               <span className="block font-serif text-lg text-ink-900">{doc.fullName}</span>

@@ -4,6 +4,8 @@ import Link from 'next/link';
 import { useActionState } from 'react';
 import { useFormStatus } from 'react-dom';
 
+import { ConfirmSubmit } from '@/components/confirm-dialog';
+
 import { submitBooking, type BookingState } from './actions';
 
 const INITIAL: BookingState = { status: 'idle' };
@@ -11,16 +13,51 @@ const INITIAL: BookingState = { status: 'idle' };
 const fieldClasses =
   'mt-1.5 block w-full rounded border bg-surface px-3.5 py-3 text-base text-ink-900 placeholder:text-ink-400';
 
-function SubmitButton() {
+const FORM_ID = 'booking-details';
+
+/**
+ * The final button. With JavaScript it opens a summary dialog first, because this is the
+ * moment a patient commits to turning up somewhere at a particular time and a misread
+ * date is expensive for everyone. Without JavaScript it is an ordinary submit.
+ */
+function SubmitButton({ slot }: { slot: BookingSlotDetails }) {
   const { pending } = useFormStatus();
+
   return (
-    <button
-      type="submit"
-      disabled={pending}
-      className="inline-flex min-h-[3.25rem] w-full items-center justify-center rounded bg-brand-700 px-5 py-3 text-base font-semibold text-white hover:bg-brand-800 disabled:opacity-60"
+    <ConfirmSubmit
+      formId={FORM_ID}
+      pending={pending}
+      label="Confirm booking"
+      pendingLabel="Booking your slot…"
+      title="Is this right?"
+      confirmLabel="Yes, book it"
+      cancelLabel="Let me check"
     >
-      {pending ? 'Booking your slot…' : 'Confirm booking'}
-    </button>
+      <dl className="divide-y divide-line border-y border-line">
+        <div className="flex justify-between gap-4 py-2.5">
+          <dt className="text-sm text-ink-500">What</dt>
+          <dd className="text-right text-sm font-semibold text-ink-900">
+            {slot.serviceName}
+          </dd>
+        </div>
+        {slot.doctorName ? (
+          <div className="flex justify-between gap-4 py-2.5">
+            <dt className="text-sm text-ink-500">Who</dt>
+            <dd className="text-right text-sm font-semibold text-ink-900">
+              {slot.doctorName}
+            </dd>
+          </div>
+        ) : null}
+        <div className="flex justify-between gap-4 py-2.5">
+          <dt className="text-sm text-ink-500">When</dt>
+          <dd className="text-right text-sm font-semibold text-ink-900">{slot.whenLabel}</dd>
+        </div>
+      </dl>
+      <p className="mt-4 text-sm leading-relaxed text-ink-500">
+        Nothing is charged now. We will email your reference code, and you can cancel any
+        time from that email.
+      </p>
+    </ConfirmSubmit>
   );
 }
 
@@ -88,7 +125,7 @@ export function BookingForm({
   const prior = state.status === 'error' ? state.values : undefined;
 
   return (
-    <form action={formAction} noValidate className="space-y-5">
+    <form action={formAction} id={FORM_ID} noValidate className="space-y-5">
       <input type="hidden" name="serviceId" value={slot.serviceId} />
       <input type="hidden" name="doctorId" value={slot.doctorId ?? ''} />
       <input type="hidden" name="sessionId" value={slot.sessionId} />
@@ -215,7 +252,7 @@ export function BookingForm({
         ) : null}
       </div>
 
-      <SubmitButton />
+      <SubmitButton slot={slot} />
 
       <p className="text-sm leading-relaxed text-ink-500">
         Nothing is charged now. You pay at the clinic on the day.

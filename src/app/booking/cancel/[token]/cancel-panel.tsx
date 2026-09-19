@@ -4,6 +4,8 @@ import Link from 'next/link';
 import { useActionState } from 'react';
 import { useFormStatus } from 'react-dom';
 
+import { ConfirmSubmit } from '@/components/confirm-dialog';
+
 import { cancelByToken, type CancelState } from './actions';
 
 const INITIAL: CancelState = { status: 'idle' };
@@ -11,13 +13,21 @@ const INITIAL: CancelState = { status: 'idle' };
 function Submit() {
   const { pending } = useFormStatus();
   return (
-    <button
-      type="submit"
-      disabled={pending}
-      className="inline-flex min-h-[3rem] w-full items-center justify-center rounded bg-red-700 px-5 py-3 text-base font-semibold text-white hover:bg-red-800 disabled:opacity-60 sm:w-auto"
+    <ConfirmSubmit
+      formId="cancel-by-token"
+      pending={pending}
+      tone="danger"
+      label="Cancel this appointment"
+      pendingLabel="Cancelling…"
+      title="Cancel this appointment?"
+      confirmLabel="Yes, cancel it"
+      cancelLabel="Keep it"
     >
-      {pending ? 'Cancelling…' : 'Yes, cancel this appointment'}
-    </button>
+      <p className="text-sm leading-relaxed text-ink-500">
+        The slot goes back to other patients straight away. This cannot be undone, though
+        you are welcome to book again.
+      </p>
+    </ConfirmSubmit>
   );
 }
 
@@ -68,7 +78,7 @@ export function CancelPanel({
   }
 
   return (
-    <form action={formAction} className="space-y-5">
+    <form action={formAction} id="cancel-by-token" className="space-y-5">
       {state.status === 'error' ? (
         <div
           role="alert"
@@ -85,8 +95,10 @@ export function CancelPanel({
         to book again afterwards.
       </p>
 
-      <div className="flex flex-col gap-3 sm:flex-row">
-        <Submit />
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-stretch">
+        <div className="sm:w-64">
+          <Submit />
+        </div>
         <Link
           href="/"
           className="inline-flex min-h-[3rem] items-center justify-center rounded border border-line bg-surface px-5 py-3 text-base font-semibold text-ink-900 hover:bg-surface-sunken"

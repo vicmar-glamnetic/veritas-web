@@ -1,7 +1,9 @@
 import type { Metadata } from 'next';
 
+import { MobileActions } from '@/components/mobile-actions';
 import { SiteFooter } from '@/components/site-footer';
 import { SiteHeader } from '@/components/site-header';
+import { telHref } from '@/lib/mobile';
 import { getSiteSettings } from '@/lib/queries';
 import { SITE_URL } from '@/lib/site';
 
@@ -40,7 +42,8 @@ export const viewport = {
   themeColor: '#0e6058',
 };
 
-export default function RootLayout({ children }: LayoutProps<'/'>) {
+export default async function RootLayout({ children }: LayoutProps<'/'>) {
+  const settings = await getSiteSettings();
   return (
     <html lang="en-PH" className="h-full antialiased">
       <body className="flex min-h-full flex-col bg-paper text-ink-900">
@@ -52,6 +55,10 @@ export default function RootLayout({ children }: LayoutProps<'/'>) {
           {children}
         </main>
         <SiteFooter />
+        <MobileActions
+          phone={settings.phonePrimary || null}
+          telHref={settings.phonePrimary ? telHref(settings.phonePrimary) : null}
+        />
       </body>
     </html>
   );

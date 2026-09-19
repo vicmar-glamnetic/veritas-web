@@ -212,7 +212,18 @@ Environment variables are documented in `.env.example`. Never commit a real one.
 query string, so the whole flow works with JavaScript off, the back button behaves, and a
 half-finished booking survives a reload.
 
-Only non-personal choices go in the URL: service, doctor, date, session, slot. Name,
+Step 1 is itself staged: a patient picks one of three kinds of visit before seeing any
+service names. Presenting all thirty-eight bookable services at once was the single
+worst thing about the first version.
+
+A `ConfirmSubmit` dialog (`src/components/confirm-dialog.tsx`) sits in front of booking
+and both cancel actions. It is progressively enhanced: the visible button is a real
+`type="submit"`, so with no JavaScript it submits as before, and the click handler only
+intercepts once a native `<dialog>` is available. The dialog's own button reaches the
+form through `form="<id>"`. **Do not replace it with a div** — `showModal()` is what
+provides the focus trap, the Escape key and the inert background.
+
+Only non-personal choices go in the URL: kind, service, doctor, date, session, slot. Name,
 mobile, email and notes are POSTed in step 3 and never appear in a query string, browser
 history or an access log. The reference code is rendered from the action result, not
 redirected to, so it never reaches the URL either.

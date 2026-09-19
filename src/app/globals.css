@@ -18,29 +18,33 @@
  */
 
 @theme {
-  /* Pine green. Darker and less saturated than a stock teal. */
-  --color-brand-50: #eef4f0;
-  --color-brand-100: #d6e6dc;
-  --color-brand-200: #adcdba;
-  --color-brand-300: #7aae91;
-  --color-brand-400: #4c8e6c;
-  --color-brand-500: #2f7354;
-  --color-brand-600: #1f5c42;
-  --color-brand-700: #184a35;
-  --color-brand-800: #133c2b;
-  --color-brand-900: #102f22;
+  /*
+   * Deep clinical blue. Blue is what people expect of a clinic, and a dark, slightly
+   * desaturated one reads as an established practice rather than a tech product.
+   * brand-300 and lighter are decorative only: they do not clear 4.5:1 on paper.
+   */
+  --color-brand-50: #eef3f8;
+  --color-brand-100: #d8e4f0;
+  --color-brand-200: #b3cae1;
+  --color-brand-300: #7fa5c9;
+  --color-brand-400: #4f80ad;
+  --color-brand-500: #2e6291;
+  --color-brand-600: #1f4e78;
+  --color-brand-700: #1a4064;
+  --color-brand-800: #163351;
+  --color-brand-900: #122941;
 
-  /* Warm greys, not blue-greys. */
-  --color-ink-900: #1c1a16;
-  --color-ink-700: #3d3931;
-  --color-ink-500: #5f594e;
-  --color-ink-400: #6a6355;
+  /* Near-neutral greys with a trace of warmth, so the blue stays the only colour. */
+  --color-ink-900: #1a1a18;
+  --color-ink-700: #3a3935;
+  --color-ink-500: #5c5a53;
+  --color-ink-400: #68665e;
 
-  --color-paper: #fbf9f5;
+  --color-paper: #faf9f6;
   --color-surface: #ffffff;
-  --color-surface-sunken: #f4f1ea;
-  --color-line: #e2ddd1;
-  --color-line-strong: #cfc8b8;
+  --color-surface-sunken: #f1efe9;
+  --color-line: #e3e0d8;
+  --color-line-strong: #cbc7bc;
 
   /* Terracotta rather than amber: warmer, less "alert banner". */
   --color-accent-50: #fdf3ec;
@@ -71,6 +75,16 @@
     color: var(--color-ink-900);
     font-family: var(--font-sans);
     text-size-adjust: 100%;
+  }
+
+  /*
+   * The sticky call/book bar covers the bottom of the page on phones, so the last
+   * thing on every page needs clearance or it sits under the bar and cannot be read.
+   */
+  @media (max-width: 639px) {
+    body {
+      padding-bottom: 4.75rem;
+    }
   }
 
   /* Headings carry the serif; body copy stays sans for legibility at small sizes. */

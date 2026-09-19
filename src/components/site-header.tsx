@@ -19,7 +19,7 @@ export async function SiteHeader() {
 
   return (
     <header className="sticky top-0 z-40 border-b border-line bg-paper/95 backdrop-blur-sm">
-      <div className="mx-auto max-w-5xl">
+      <div className="mx-auto max-w-6xl">
         <div className="flex items-center justify-between gap-4 px-4 py-3.5">
           <Link href="/" className="group -my-1 block rounded py-1">
             <span className="block font-serif text-xl leading-none font-semibold text-ink-900 sm:text-2xl">

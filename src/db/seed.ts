@@ -109,7 +109,7 @@ const LABORATORY: ServiceSeed[] = [
   { key: 'l-sgpt', name: 'SGPT / ALT', category: 'laboratory', price: '280.00', duration: 15, bookable: true, listed: true },
   { key: 'l-sgot', name: 'SGOT / AST', category: 'laboratory', price: '280.00', duration: 15, bookable: true, listed: true },
   { key: 'l-hba1c', name: 'HbA1c (Glycated Haemoglobin)', category: 'laboratory', price: '750.00', duration: 15, bookable: true, listed: true },
-  { key: 'l-ogtt', name: 'Oral Glucose Tolerance Test (75g)', category: 'laboratory', price: '900.00', duration: 15, bookable: true, listed: true, prep: 'Fasting for 8 hours is required. Allow about 2 hours at the clinic — blood is drawn before and after the glucose drink.' },
+  { key: 'l-ogtt', name: 'Oral Glucose Tolerance Test (75g)', category: 'laboratory', price: '900.00', duration: 15, bookable: true, listed: true, prep: 'Fasting for 8 hours is required. Allow about 2 hours at the clinic, because blood is drawn before and after the glucose drink.' },
   { key: 'l-lytes', name: 'Serum Electrolytes (Na, K, Cl)', category: 'laboratory', price: '700.00', duration: 15, bookable: true, listed: true },
   { key: 'l-hbsag', name: 'Hepatitis B Surface Antigen (HBsAg)', category: 'laboratory', price: '400.00', duration: 15, bookable: true, listed: true },
   { key: 'l-tsh', name: 'Thyroid Stimulating Hormone (TSH)', category: 'laboratory', price: '650.00', duration: 15, bookable: true, listed: true },
@@ -122,9 +122,9 @@ const LABORATORY: ServiceSeed[] = [
 const IMAGING: ServiceSeed[] = [
   { key: 'i-cxr-pa', name: 'Chest X-ray (PA view)', category: 'imaging', price: '450.00', duration: 30, bookable: true, listed: true, prep: 'Please wear a top without metal buttons, zips or underwire.' },
   { key: 'i-cxr-pal', name: 'Chest X-ray (PA and Lateral)', category: 'imaging', price: '700.00', duration: 30, bookable: true, listed: true, prep: 'Please wear a top without metal buttons, zips or underwire.' },
-  { key: 'i-uts-abdomen', name: 'Whole Abdomen Ultrasound', category: 'imaging', price: '1500.00', duration: 30, bookable: true, listed: true, prep: 'Fasting for 8 hours is required. Drink 4 glasses of water an hour before your appointment and do not urinate — a full bladder is needed.' },
-  { key: 'i-uts-kub', name: 'Kidney, Ureter and Bladder (KUB) Ultrasound', category: 'imaging', price: '1200.00', duration: 30, bookable: true, listed: true, prep: 'Drink 4 glasses of water an hour before your appointment and do not urinate — a full bladder is needed.' },
-  { key: 'i-uts-pelvic', name: 'Pelvic Ultrasound', category: 'imaging', price: '1200.00', duration: 30, bookable: true, listed: true, prep: 'Drink 4 glasses of water an hour before your appointment and do not urinate — a full bladder is needed.' },
+  { key: 'i-uts-abdomen', name: 'Whole Abdomen Ultrasound', category: 'imaging', price: '1500.00', duration: 30, bookable: true, listed: true, prep: 'Fasting for 8 hours is required. Drink 4 glasses of water an hour before your appointment and do not urinate. A full bladder is needed.' },
+  { key: 'i-uts-kub', name: 'Kidney, Ureter and Bladder (KUB) Ultrasound', category: 'imaging', price: '1200.00', duration: 30, bookable: true, listed: true, prep: 'Drink 4 glasses of water an hour before your appointment and do not urinate. A full bladder is needed.' },
+  { key: 'i-uts-pelvic', name: 'Pelvic Ultrasound', category: 'imaging', price: '1200.00', duration: 30, bookable: true, listed: true, prep: 'Drink 4 glasses of water an hour before your appointment and do not urinate. A full bladder is needed.' },
   { key: 'i-uts-tvs', name: 'Transvaginal Ultrasound', category: 'imaging', price: '1600.00', duration: 30, bookable: true, listed: true, prep: 'Please empty your bladder just before the scan.' },
   { key: 'i-uts-thyroid', name: 'Thyroid Ultrasound', category: 'imaging', price: '1400.00', duration: 30, bookable: true, listed: true },
   { key: 'i-uts-breast', name: 'Breast Ultrasound', category: 'imaging', price: '1600.00', duration: 30, bookable: true, listed: true, prep: 'Please do not wear talcum powder, lotion or deodorant on the day of the scan.' },
@@ -312,7 +312,7 @@ async function main() {
     sessionId: null,
     doctorId: null,
     date: addDays(today, 14),
-    reason: 'Clinic closed — annual deep cleaning and equipment servicing',
+    reason: 'Clinic closed for annual deep cleaning and equipment servicing',
   });
 
   console.log('Inserting promos…');
@@ -328,9 +328,9 @@ async function main() {
       sortOrder: 1,
     },
     {
-      title: 'Executive Check-up Package — ₱2,499',
+      title: 'Executive Check-up Package, ₱2,499',
       body:
-        'Complete Blood Count, Urinalysis, Fasting Blood Sugar, Lipid Profile, Creatinine, SGPT, Uric Acid, Chest X-ray and 12-lead ECG, with a follow-up consultation to go through the results. Normally ₱4,160. Fasting for 10 hours is required.',
+        'Complete Blood Count, Urinalysis, Fasting Blood Sugar, Lipid Profile, Creatinine, SGPT, Uric Acid, Chest X-ray and 12-lead ECG, with a follow-up consultation to go through the results. Normally ₱4,160 if taken separately. Fasting for 10 hours is required.',
       imageUrl: null,
       startsOn: addDays(today, -3),
       endsOn: addDays(today, 45),

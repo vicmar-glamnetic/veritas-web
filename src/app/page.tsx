@@ -43,91 +43,98 @@ export default async function HomePage() {
 
   return (
     <>
-      {/* Hero. No box, no gradient; a big serif line on paper. */}
+      {/*
+        Hero. On a wide screen the practical facts sit beside the headline rather than
+        below it: hours, address and phone are what most visitors actually came for, and
+        leaving half the viewport empty to keep them below the fold helps nobody. They
+        stack under the hero on a phone, where the order is still right.
+      */}
       <section className="border-b border-line bg-surface">
-        <Container className="py-12 sm:py-20">
-          <div className="max-w-2xl">
-            <p className="text-xs font-semibold tracking-[0.18em] text-brand-600 uppercase">
-              Consultations · Laboratory · X-ray · Ultrasound
-            </p>
-            <h1 className="mt-5 text-[2.1rem] leading-[1.15] text-ink-900 sm:text-5xl">
-              Book your slot, then come at that time.
-            </h1>
-            <p className="mt-5 text-lg leading-relaxed text-ink-700">
-              A clinic, a laboratory and an X-ray room in the same building. Booking takes
-              about a minute and costs nothing. You pay here, on the day.
-            </p>
+        <Container className="py-12 sm:py-16">
+          <div className="lg:grid lg:grid-cols-[1.1fr_0.9fr] lg:items-start lg:gap-16">
+            <div className="max-w-2xl">
+              <p className="text-xs font-semibold tracking-[0.18em] text-brand-600 uppercase">
+                Consultations · Laboratory · X-ray · Ultrasound
+              </p>
+              <h1 className="mt-5 text-[2.1rem] leading-[1.15] text-ink-900 sm:text-5xl">
+                Book your slot, then come at that time.
+              </h1>
+              <p className="mt-5 text-lg leading-relaxed text-ink-700">
+                A clinic, a laboratory and an X-ray room in the same building. Booking
+                takes about a minute and costs nothing. You pay here, on the day.
+              </p>
 
-            <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-              <ButtonLink href="/book" className="sm:min-w-52">
-                Book an appointment
-              </ButtonLink>
-              {settings.phonePrimary ? (
-                <ButtonLink href={telHref(settings.phonePrimary)} variant="secondary">
-                  Call {settings.phonePrimary}
+              <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+                <ButtonLink href="/book" className="sm:min-w-52">
+                  Book an appointment
                 </ButtonLink>
-              ) : null}
-            </div>
-          </div>
+                {settings.phonePrimary ? (
+                  <ButtonLink href={telHref(settings.phonePrimary)} variant="secondary">
+                    Call {settings.phonePrimary}
+                  </ButtonLink>
+                ) : null}
+              </div>
 
-          <p className="mt-10 max-w-xl border-l-2 border-brand-200 pl-4 text-sm leading-relaxed text-ink-500">
-            Walk-ins are still welcome. We hold back places in every session for people who
-            just turn up, so booking online never takes a slot away from someone at the
-            door.
-          </p>
+              <p className="mt-8 max-w-xl border-l-2 border-brand-200 pl-4 text-sm leading-relaxed text-ink-500">
+                Walk-ins are still welcome. We hold back places in every session for
+                people who just turn up, so booking online never takes a slot away from
+                someone at the door.
+              </p>
+            </div>
+
+            <aside className="mt-12 rounded border border-line bg-paper p-6 lg:mt-0">
+              <h2 className="sr-only">Clinic details</h2>
+              <dl className="divide-y divide-line">
+                <div className="pb-5">
+                  <dt className="text-xs font-semibold tracking-[0.14em] text-ink-400 uppercase">
+                    When we are open
+                  </dt>
+                  <dd className="mt-2 text-sm leading-relaxed whitespace-pre-line text-ink-700">
+                    {settings.openingHoursText || 'Please call to check our hours.'}
+                  </dd>
+                </div>
+                <div className="py-5">
+                  <dt className="text-xs font-semibold tracking-[0.14em] text-ink-400 uppercase">
+                    Where to find us
+                  </dt>
+                  <dd className="mt-2 text-sm leading-relaxed text-ink-700">
+                    {settings.address}
+                    <Link
+                      href="/contact"
+                      className="mt-2 block text-brand-700 underline underline-offset-4"
+                    >
+                      Directions and map
+                    </Link>
+                  </dd>
+                </div>
+                <div className="pt-5">
+                  <dt className="text-xs font-semibold tracking-[0.14em] text-ink-400 uppercase">
+                    Ring the clinic
+                  </dt>
+                  <dd className="mt-2">
+                    {settings.phonePrimary ? (
+                      <a
+                        href={telHref(settings.phonePrimary)}
+                        className="block font-serif text-2xl text-brand-700 underline underline-offset-4"
+                      >
+                        {settings.phonePrimary}
+                      </a>
+                    ) : null}
+                    {settings.phoneSecondary ? (
+                      <a
+                        href={telHref(settings.phoneSecondary)}
+                        className="mt-1 block text-sm text-brand-700 underline underline-offset-4"
+                      >
+                        {settings.phoneSecondary}
+                      </a>
+                    ) : null}
+                  </dd>
+                </div>
+              </dl>
+            </aside>
+          </div>
         </Container>
       </section>
-
-      {/* Practical strip: three plain columns, divided by rules, not cards. */}
-      <Container className="py-12">
-        <dl className="grid gap-8 sm:grid-cols-3 sm:gap-10">
-          <div>
-            <dt className="text-xs font-semibold tracking-[0.14em] text-ink-400 uppercase">
-              When we are open
-            </dt>
-            <dd className="mt-3 text-sm leading-relaxed whitespace-pre-line text-ink-700">
-              {settings.openingHoursText || 'Please call to check our hours.'}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-xs font-semibold tracking-[0.14em] text-ink-400 uppercase">
-              Where to find us
-            </dt>
-            <dd className="mt-3 text-sm leading-relaxed text-ink-700">
-              {settings.address}
-              <Link
-                href="/contact"
-                className="mt-2 block text-brand-700 underline underline-offset-4"
-              >
-                Directions and map
-              </Link>
-            </dd>
-          </div>
-          <div>
-            <dt className="text-xs font-semibold tracking-[0.14em] text-ink-400 uppercase">
-              Ring the clinic
-            </dt>
-            <dd className="mt-3">
-              {settings.phonePrimary ? (
-                <a
-                  href={telHref(settings.phonePrimary)}
-                  className="block font-serif text-2xl text-brand-700 underline underline-offset-4"
-                >
-                  {settings.phonePrimary}
-                </a>
-              ) : null}
-              {settings.phoneSecondary ? (
-                <a
-                  href={telHref(settings.phoneSecondary)}
-                  className="mt-1 block text-sm text-brand-700 underline underline-offset-4"
-                >
-                  {settings.phoneSecondary}
-                </a>
-              ) : null}
-            </dd>
-          </div>
-        </dl>
-      </Container>
 
       {/* Promos: a tinted strip, not two matching cards. */}
       {promos.length > 0 ? (
@@ -166,7 +173,7 @@ export default async function HomePage() {
             <li key={item.title} className="flex gap-4 sm:gap-6">
               <span
                 aria-hidden="true"
-                className="mt-1 w-6 shrink-0 font-serif text-lg text-brand-300"
+                className="mt-1 w-6 shrink-0 font-serif text-lg text-brand-400"
               >
                 {String(i + 1).padStart(2, '0')}
               </span>

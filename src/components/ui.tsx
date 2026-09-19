@@ -21,7 +21,7 @@ export function PageHeader({
 }) {
   return (
     <div className="border-b border-line bg-surface">
-      <div className="mx-auto max-w-5xl px-4 py-10 sm:py-14">
+      <div className="mx-auto max-w-6xl px-4 py-10 sm:py-14">
         <h1 className="text-3xl leading-tight text-ink-900 sm:text-4xl">{title}</h1>
         {lead ? (
           <p className="mt-4 max-w-xl text-base leading-relaxed text-ink-500 sm:text-lg">
@@ -41,7 +41,7 @@ export function Container({
   children: ReactNode;
   className?: string;
 }) {
-  return <div className={`mx-auto max-w-5xl px-4 ${className}`}>{children}</div>;
+  return <div className={`mx-auto max-w-6xl px-4 ${className}`}>{children}</div>;
 }
 
 /**

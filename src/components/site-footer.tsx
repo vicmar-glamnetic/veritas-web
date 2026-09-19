@@ -13,7 +13,7 @@ export async function SiteFooter() {
 
   return (
     <footer className="mt-20 border-t border-line-strong bg-surface">
-      <div className="mx-auto max-w-5xl px-4 py-12">
+      <div className="mx-auto max-w-6xl px-4 py-12">
         <p className="font-serif text-2xl text-ink-900">{settings.clinicName}</p>
 
         <div className="mt-8 grid gap-8 sm:grid-cols-3">

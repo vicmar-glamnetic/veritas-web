@@ -4,6 +4,8 @@ import Link from 'next/link';
 import { useActionState } from 'react';
 import { useFormStatus } from 'react-dom';
 
+import { ConfirmSubmit } from '@/components/confirm-dialog';
+
 import { cancelFromLookup, lookupBooking, type LookupState } from './actions';
 
 const INITIAL: LookupState = { status: 'idle' };
@@ -196,7 +198,7 @@ function BookingDetails({
       ) : null}
 
       {canCancel ? (
-        <form action={formAction} className="mt-6 rounded border border-line px-4 py-4">
+        <form action={formAction} id="cancel-booking" className="mt-6 rounded border border-line px-4 py-4">
           <h2 className="text-sm font-bold text-ink-900">Cannot make it?</h2>
           <p className="mt-1.5 text-sm leading-relaxed text-ink-500">
             Cancelling frees the slot for someone else. You cannot undo this, but you can
@@ -218,7 +220,7 @@ function BookingDetails({
             />
           </div>
           <div className="mt-4">
-            <Submit label="Cancel this appointment" busy="Cancelling…" tone="danger" />
+            <CancelSubmit when={when} serviceName={booking.serviceName} />
           </div>
         </form>
       ) : (
@@ -248,6 +250,32 @@ function BookingDetails({
 
       <p className="sr-only">Reference {reference}</p>
     </div>
+  );
+}
+
+/** Cancelling frees the slot immediately and cannot be undone, so it asks first. */
+function CancelSubmit({ when, serviceName }: { when: string; serviceName: string }) {
+  const { pending } = useFormStatus();
+  return (
+    <ConfirmSubmit
+      formId="cancel-booking"
+      pending={pending}
+      tone="danger"
+      label="Cancel this appointment"
+      pendingLabel="Cancelling…"
+      title="Cancel this appointment?"
+      confirmLabel="Yes, cancel it"
+      cancelLabel="Keep it"
+    >
+      <p className="text-sm leading-relaxed text-ink-700">
+        You are cancelling <strong className="font-semibold">{serviceName}</strong> on{' '}
+        <strong className="font-semibold">{when}</strong>.
+      </p>
+      <p className="mt-3 text-sm leading-relaxed text-ink-500">
+        The slot goes back to other patients straight away. This cannot be undone, though
+        you are welcome to book again.
+      </p>
+    </ConfirmSubmit>
   );
 }
 
