@@ -4,6 +4,7 @@ import { and, asc, desc, eq, gte, ilike, inArray, lt, or, sql } from 'drizzle-or
 
 import { db } from '@/db';
 import { bookings, doctors, patients, services } from '@/db/schema';
+import type { MonitorRow } from '@/lib/monitor';
 import { addDays, manilaDateString, manilaToUtc } from '@/lib/time';
 
 /** One row of the bookings list, flattened for display. */
@@ -153,3 +154,42 @@ export async function getBookingsAffectedByBlackout(
 }
 
 export const todayInManila = () => manilaDateString();
+
+/**
+ * Today's bookings, trimmed to what a screen in a public waiting room may show.
+ *
+ * This does its own select rather than reusing `baseQuery()` on purpose: that one
+ * carries a mobile number, an email address and the patient's note, none of which
+ * should travel to a display hanging in a waiting room, even inside props that nobody
+ * renders. Minimum necessary, per the Data Privacy Act.
+ *
+ * Cancelled and no-show bookings are excluded — a board is about who is still here.
+ */
+export async function getMonitorRows(date: string): Promise<MonitorRow[]> {
+  const from = manilaToUtc(date, '00:00');
+  const to = manilaToUtc(addDays(date, 1), '00:00');
+
+  return db
+    .select({
+      id: bookings.id,
+      referenceCode: bookings.referenceCode,
+      status: bookings.status,
+      scheduledStart: bookings.scheduledStart,
+      updatedAt: bookings.updatedAt,
+      patientName: patients.fullName,
+      serviceCategory: services.category,
+      doctorName: doctors.fullName,
+    })
+    .from(bookings)
+    .innerJoin(patients, eq(patients.id, bookings.patientId))
+    .innerJoin(services, eq(services.id, bookings.serviceId))
+    .leftJoin(doctors, eq(doctors.id, bookings.doctorId))
+    .where(
+      and(
+        gte(bookings.scheduledStart, from),
+        lt(bookings.scheduledStart, to),
+        inArray(bookings.status, ['booked', 'arrived']),
+      ),
+    )
+    .orderBy(asc(bookings.scheduledStart));
+}

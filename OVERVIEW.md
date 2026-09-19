@@ -54,7 +54,11 @@ asking the clinic.
 ### Explicitly out of scope for this phase
 
 Online payment · SMS · patient login · rescheduling (cancel and rebook only) · results
-viewing · billing · queue display · laboratory or imaging modules.
+viewing · billing · laboratory or imaging modules.
+
+Queue display was on that list until the client asked for one. What was built is a
+read-only board (§10), not a queueing system: nothing calls, numbers, defers or reorders
+a patient. That remains a later phase.
 
 ---
 
@@ -421,9 +425,36 @@ accident.
 | **Promos** | any | Add with start and end dates; they appear and disappear by themselves. |
 | **Settings** | admin | Clinic details, opening hours, booking horizon. |
 | **Staff users** | admin | Accounts and roles. |
+| **Waiting room screen** | any | `/admin/monitor` — the board that faces the patients. Opens in its own tab. |
 
 Reception accounts do not see Settings or Staff users in the navigation and are
 redirected away if they type the URL.
+
+### The waiting room board
+
+`/admin/monitor` is a full-screen board for a television in the waiting room: one panel
+each for consultation, laboratory and imaging, showing who is being seen and who is
+next. It sits outside the `(app)` route group so it gets the whole display with no admin
+chrome, and repeats `requireStaff()` in its own layout, because the `(app)` guard does
+not reach it.
+
+**It adds no status and no new staff step.** `arrived` is written the moment the desk
+taps Arrived on Today, so the arrived booking with the latest `updated_at` is the last
+patient the desk moved along, and the board derives from that. A parallel queue would be
+a second thing to keep in step, and it would drift.
+
+**What a public wall is allowed to show.** The reference code — the patient's own public
+identifier, already in their confirmation email, meaningless to the rest of the room —
+and a name cut to "Corazon A." by `shortenName`. No surname, no mobile, no email, and no
+service name, because "Chest X-ray" beside a name is a diagnosis hint. `getMonitorRows`
+selects those columns and no others, so the rest cannot reach the page even inside a
+prop that nothing renders. The second line is the doctor for a consultation and the
+appointment time otherwise, since laboratory and imaging sessions have no doctor.
+
+It refreshes itself every 15 seconds with `router.refresh()`, so it repaints without the
+page flashing white in front of the room, and falls back to a meta refresh with
+JavaScript off. Voice announcement is off by default, remembered per screen, and
+announces only a change — never the call already on screen when the page loaded.
 
 ### Status changes
 
@@ -577,8 +608,8 @@ performs an action, it must look tappable.
 ### Done
 
 Schema and migrations · availability engine · booking flow · confirmation email · lookup
-and cancellation · staff authentication · Today screen · all admin screens · deployed to
-Vercel.
+and cancellation · staff authentication · Today screen · all admin screens · waiting
+room board · deployed to Vercel.
 
 ### Placeholder — must be replaced before launch
 

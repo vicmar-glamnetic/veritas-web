@@ -159,7 +159,11 @@ A `session_blackouts` row blocks one date, targeting either one session, or one 
 Do not build these. If one seems necessary, say so and wait.
 
 Online payment · SMS · patient login · rescheduling (cancel and rebook only) · results
-viewing · billing · queue display · laboratory or imaging modules.
+viewing · billing · laboratory or imaging modules.
+
+Queue display was on this list until the client asked for one. What exists is a
+read-only board (see below), not a queueing system: nothing calls, numbers, defers or
+reorders a patient. That still belongs to a later phase.
 
 ## Commands
 
@@ -257,6 +261,40 @@ the page guard alone secures nothing.
   and `htmlFor` then points at the wrong control or none. `Field` in
   `(app)/ui.tsx` nests the control inside the `<label>`; do not reintroduce ids for
   labelling. The trade is that a `hint` becomes part of the accessible name.
+
+## The waiting room board
+
+`/admin/monitor` is the screen that faces the patients. It sits outside the `(app)`
+route group so it gets the whole display with no admin chrome, and repeats
+`requireStaff()` in its own layout, because the `(app)` guard does not reach it. A staff
+member signs the screen in when the clinic opens and the session cookie carries the day.
+
+- **There is no "now serving" status, and none was added.** `arrived` is written the
+  moment the desk taps Arrived on Today, so the arrived booking with the latest
+  `updated_at` is the last patient the desk moved along. The board derives from that.
+  Inventing a parallel queue would mean a second thing for staff to keep in step, and
+  they would not.
+- **A public wall gets the minimum.** The reference code is the patient's own public
+  identifier and means nothing to the rest of the room; `shortenName` cuts the name to
+  "Corazon A.". No surname, no mobile, no email, and **no service name** — "Chest X-ray"
+  beside a name is a diagnosis hint. `getMonitorRows` selects those columns and no
+  others, so they cannot reach the page even inside an unrendered prop.
+- The second line is the doctor for a consultation and the appointment time otherwise,
+  because laboratory and imaging sessions have no doctor.
+- **The panels size to their content and the row is centred.** Stretching a grid down a
+  1080p screen left each panel two thirds empty and put the three rules at three
+  different heights, because the queues are different lengths.
+- Refreshing is `router.refresh()` every 15 seconds, so the board repaints without the
+  page flashing white in front of the room. With JavaScript off it falls back to a meta
+  refresh that is deliberately written with `dangerouslySetInnerHTML` inside `<noscript>`
+  — React 19 hoists a bare `<meta>` into `<head>`, where it would reload the page for
+  everyone.
+- Voice announcement is off by default and remembered per screen in `localStorage`. It
+  announces a change, never the call that was already on screen when the page loaded,
+  or every refresh would shout at the room.
+- `npm run db:demo-today` fills all three categories and marks one arrived in each, so
+  the board has something to show. It falls back to any active session when none runs
+  today, because the clinic is shut on a Sunday and a Sunday is when someone demos it.
 
 ## Layouts
 
