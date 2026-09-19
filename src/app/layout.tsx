@@ -4,6 +4,7 @@ import { MobileActions } from '@/components/mobile-actions';
 import { SiteFooter } from '@/components/site-footer';
 import { SiteHeader } from '@/components/site-header';
 import { telHref } from '@/lib/mobile';
+import { ALLOW_INDEXING } from '@/lib/indexing';
 import { getSiteSettings } from '@/lib/queries';
 import { SITE_URL } from '@/lib/site';
 
@@ -32,7 +33,9 @@ export async function generateMetadata(): Promise<Metadata> {
       url: SITE_URL,
     },
     twitter: { card: 'summary_large_image' },
-    robots: { index: true, follow: true },
+    robots: ALLOW_INDEXING
+      ? { index: true, follow: true }
+      : { index: false, follow: false },
   };
 }
 
