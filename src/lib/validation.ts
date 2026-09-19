@@ -55,3 +55,62 @@ export const inquirySchema = z.object({
 });
 
 export type InquiryInput = z.infer<typeof inquirySchema>;
+
+/* -------------------------------------------------------------------------- */
+/* Booking                                                                    */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Step 3 of the booking form. The service, doctor, session and slot come from hidden
+ * fields carried through the earlier steps; they are re-checked against the database in
+ * the server action, because a hidden field is just a suggestion from the browser.
+ */
+export const createBookingSchema = z.object({
+  serviceId: z.uuid('Please choose a service.'),
+  doctorId: z
+    .string()
+    .trim()
+    .transform((v) => (v === '' ? undefined : v))
+    .optional()
+    .pipe(z.uuid('Please choose a doctor.').optional()),
+  sessionId: z.uuid('Please choose a time.'),
+  /** ISO instant of the slot. */
+  start: z
+    .string()
+    .trim()
+    .refine((v) => !Number.isNaN(Date.parse(v)), 'Please choose a time.')
+    .transform((v) => new Date(v)),
+  fullName: z
+    .string()
+    .trim()
+    .min(2, 'Please put your full name in.')
+    .max(120, 'That name is longer than we can store.'),
+  mobile: phMobileSchema,
+  email: z
+    .string()
+    .trim()
+    .min(1, 'We need an email address to send your confirmation to.')
+    .max(200)
+    .pipe(z.email('That email address does not look right.')),
+  notes: optionalText(500),
+  /** The Data Privacy Act consent tick. The form cannot be submitted without it. */
+  consent: z
+    .string()
+    .optional()
+    .refine((v) => v === 'on' || v === 'true', 'Please tick the box to continue.'),
+  /** Honeypot. */
+  website: z.string().max(0).optional(),
+});
+
+export type CreateBookingInputRaw = z.infer<typeof createBookingSchema>;
+
+/** Looking up your own booking: reference code plus the mobile you booked with. */
+export const bookingLookupSchema = z.object({
+  reference: z
+    .string()
+    .trim()
+    .min(4, 'Please enter your reference code.')
+    .max(20)
+    .transform((v) => v.toUpperCase().replace(/\s+/g, '')),
+  mobile: phMobileSchema,
+});

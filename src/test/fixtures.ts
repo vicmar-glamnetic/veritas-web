@@ -1,5 +1,6 @@
 import { randomInt } from 'node:crypto';
 
+import { config as loadEnv } from 'dotenv';
 import { eq, inArray, like } from 'drizzle-orm';
 import type { Pool } from 'pg';
 
@@ -26,6 +27,10 @@ import { dayOfWeekForDate } from '@/lib/time';
  * Every fixture tags its rows with a unique run id so a failed test cannot leave
  * anything behind that a later run would trip over.
  */
+
+// node --test does not read .env files, so without this `npm test` fails with
+// "TEST_DATABASE_URL is not set" on an otherwise correctly configured machine.
+loadEnv({ path: ['.env.local', '.env'], quiet: true });
 
 export const TEST_DB_URL = process.env.TEST_DATABASE_URL ?? process.env.DATABASE_URL;
 

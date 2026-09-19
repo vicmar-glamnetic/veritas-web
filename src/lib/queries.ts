@@ -110,3 +110,45 @@ export const getServiceDoctorLinks = cache(
       .select({ serviceId: serviceDoctors.serviceId, doctorId: serviceDoctors.doctorId })
       .from(serviceDoctors),
 );
+
+/* -------------------------------------------------------------------------- */
+/* Booking flow                                                               */
+/* -------------------------------------------------------------------------- */
+
+/** Everything a patient may pick on /book, grouped by the UI into categories. */
+export const getBookableServices = cache(async (): Promise<Service[]> =>
+  db
+    .select()
+    .from(services)
+    .where(and(eq(services.isActive, true), eq(services.isBookableOnline, true)))
+    .orderBy(asc(services.sortOrder), asc(services.name)),
+);
+
+export const getServiceById = cache(async (id: string): Promise<Service | null> => {
+  const [row] = await db.select().from(services).where(eq(services.id, id)).limit(1);
+  return row ?? null;
+});
+
+export const getDoctorById = cache(async (id: string): Promise<Doctor | null> => {
+  const [row] = await db.select().from(doctors).where(eq(doctors.id, id)).limit(1);
+  return row ?? null;
+});
+
+/** Active doctors who deliver a given consultation service. */
+export const getDoctorsForService = cache(async (serviceId: string): Promise<Doctor[]> =>
+  db
+    .select({
+      id: doctors.id,
+      fullName: doctors.fullName,
+      specialty: doctors.specialty,
+      isActive: doctors.isActive,
+      photoUrl: doctors.photoUrl,
+      bio: doctors.bio,
+      sortOrder: doctors.sortOrder,
+      createdAt: doctors.createdAt,
+    })
+    .from(serviceDoctors)
+    .innerJoin(doctors, eq(doctors.id, serviceDoctors.doctorId))
+    .where(and(eq(serviceDoctors.serviceId, serviceId), eq(doctors.isActive, true)))
+    .orderBy(asc(doctors.sortOrder), asc(doctors.fullName)),
+);

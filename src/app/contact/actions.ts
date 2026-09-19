@@ -5,10 +5,14 @@ import { checkRateLimit, clientIp, pruneRateLimits } from '@/lib/rate-limit';
 import { getSiteSettings } from '@/lib/queries';
 import { inquirySchema } from '@/lib/validation';
 
+export type InquiryValues = { name: string; email: string; mobile: string; message: string };
+
 export type InquiryState = {
   status: 'idle' | 'success' | 'error';
   message?: string;
   fieldErrors?: Record<string, string>;
+  /** Echoed back on failure so a rejected form does not have to be retyped. */
+  values?: InquiryValues;
 };
 
 const MAX_INQUIRIES_PER_HOUR = 5;
@@ -17,6 +21,13 @@ export async function submitInquiry(
   _previous: InquiryState,
   formData: FormData,
 ): Promise<InquiryState> {
+  const values: InquiryValues = {
+    name: String(formData.get('name') ?? ''),
+    email: String(formData.get('email') ?? ''),
+    mobile: String(formData.get('mobile') ?? ''),
+    message: String(formData.get('message') ?? ''),
+  };
+
   const parsed = inquirySchema.safeParse({
     name: formData.get('name') ?? '',
     email: formData.get('email') ?? '',
@@ -35,6 +46,7 @@ export async function submitInquiry(
       status: 'error',
       message: 'Almost there. Please check the fields marked below.',
       fieldErrors,
+      values,
     };
   }
 
@@ -50,6 +62,7 @@ export async function submitInquiry(
       status: 'error',
       message:
         'That is a few messages in a short time. Please wait a little while before sending another, or ring the clinic if it cannot wait.',
+      values,
     };
   }
   void pruneRateLimits();
@@ -61,6 +74,7 @@ export async function submitInquiry(
     return {
       status: 'error',
       message: 'Something is wrong with our mail setup. Please ring the clinic instead.',
+      values,
     };
   }
 
@@ -90,6 +104,7 @@ export async function submitInquiry(
       status: 'error',
       message:
         'Sorry, we could not get that through just now. Please ring us or send a message on Facebook instead.',
+      values,
     };
   }
 

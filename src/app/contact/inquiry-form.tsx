@@ -60,6 +60,7 @@ function Field({
 export function InquiryForm() {
   const [state, formAction] = useActionState(submitInquiry, INITIAL);
   const errors = state.fieldErrors ?? {};
+  const prior = state.values;
 
   if (state.status === 'success') {
     return (
@@ -94,6 +95,7 @@ export function InquiryForm() {
           name="name"
           type="text"
           required
+          defaultValue={prior?.name ?? ''}
           autoComplete="name"
           aria-invalid={errors.name ? true : undefined}
           aria-describedby={errors.name ? 'name-error' : undefined}
@@ -107,6 +109,7 @@ export function InquiryForm() {
           name="email"
           type="email"
           required
+          defaultValue={prior?.email ?? ''}
           autoComplete="email"
           inputMode="email"
           aria-invalid={errors.email ? true : undefined}
@@ -125,6 +128,7 @@ export function InquiryForm() {
           id="mobile"
           name="mobile"
           type="tel"
+          defaultValue={prior?.mobile ?? ''}
           autoComplete="tel"
           inputMode="tel"
           placeholder="0917 123 4567"
@@ -139,6 +143,7 @@ export function InquiryForm() {
           name="message"
           required
           rows={5}
+          defaultValue={prior?.message ?? ''}
           aria-invalid={errors.message ? true : undefined}
           aria-describedby={errors.message ? 'message-error' : undefined}
           className={`${fieldClasses} ${errors.message ? 'border-red-400' : 'border-line'}`}

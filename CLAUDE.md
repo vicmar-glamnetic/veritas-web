@@ -197,6 +197,34 @@ Environment variables are documented in `.env.example`. Never commit a real one.
 - `/book` is currently a placeholder pointing at the phone number. Milestone 4 replaces
   it wholesale.
 
+## The booking flow
+
+`/book` holds its state in the URL, not in component state. Which step you are on is a
+query string, so the whole flow works with JavaScript off, the back button behaves, and a
+half-finished booking survives a reload.
+
+Only non-personal choices go in the URL: service, doctor, date, session, slot. Name,
+mobile, email and notes are POSTed in step 3 and never appear in a query string, browser
+history or an access log. The reference code is rendered from the action result, not
+redirected to, so it never reaches the URL either.
+
+Two traps worth remembering, both of which bit during milestone 4:
+
+- **Step 3 must not depend on live availability.** The moment the booking succeeds the
+  slot is taken and drops out of `computeAvailability`. Gating the form on that list made
+  a successful booking re-render an empty form with no reference code, so a patient with
+  JavaScript off booked again. `resolveChosenSlot` resolves the slot from the URL instead;
+  whether it is still free is decided in `createBooking`, under the session lock.
+- **Rejected forms must be refilled.** Server actions re-render the form and wipe
+  uncontrolled inputs. Every failure path echoes the submitted values back as `values` so
+  a missed consent tick does not cost a patient their name, mobile and email. The same
+  applies to the inquiry form.
+
+Cancelling works two ways: the reference code plus the mobile it was booked with, or the
+single-purpose `cancel_token` from the email. The token sits in the path rather than a
+query string so it does not leak through a Referer header. Lookups are rate limited,
+because the reference code is short, and a failed lookup never says which half was wrong.
+
 ## Tests
 
 ```

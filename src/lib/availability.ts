@@ -10,7 +10,14 @@ import {
   sessions,
 } from '@/db/schema';
 
-import { addDays, dateRange, dayOfWeekForDate, manilaDateString, manilaToUtc } from './time';
+import {
+  addDays,
+  dateRange,
+  dayOfWeekForDate,
+  manilaDateString,
+  manilaTimeString,
+  manilaToUtc,
+} from './time';
 
 /**
  * The availability engine.
@@ -271,4 +278,47 @@ export async function computeAvailability(
 export async function availableDates(db: Db, query: AvailabilityQuery): Promise<string[]> {
   const days = await computeAvailability(db, query);
   return days.map((d) => d.date);
+}
+
+/**
+ * Resolve a slot the patient has already chosen, from its session and start time.
+ *
+ * This deliberately does NOT ask whether the slot is still free. Step 3 of the booking
+ * form must keep rendering after the booking succeeds, and by then the slot is taken and
+ * has dropped out of `computeAvailability`. Gating the form on live availability meant a
+ * successful booking re-rendered an empty form with no reference code, so a patient with
+ * JavaScript off would book again. Whether the slot is actually free is decided in
+ * `createBooking`, under the session lock, which is the only place that can decide it
+ * safely anyway.
+ */
+export async function resolveChosenSlot(
+  db: Db,
+  sessionId: string,
+  startIso: string,
+): Promise<{ sessionId: string; doctorId: string | null; start: Date; end: Date } | null> {
+  const start = new Date(startIso);
+  if (Number.isNaN(start.getTime())) return null;
+
+  const [session] = await db
+    .select()
+    .from(sessions)
+    .where(and(eq(sessions.id, sessionId), eq(sessions.isActive, true)))
+    .limit(1);
+
+  if (!session) return null;
+
+  // The start must be a real slot boundary of this session, on a day it runs.
+  const date = manilaDateString(start);
+  if (dayOfWeekForDate(date) !== session.dayOfWeek) return null;
+
+  const wallClock = manilaTimeString(start);
+  const starts = slotStartTimes(session.startTime, session.endTime, session.slotMinutes);
+  if (!starts.some((t) => t.slice(0, 5) === wallClock)) return null;
+
+  return {
+    sessionId: session.id,
+    doctorId: session.doctorId,
+    start,
+    end: new Date(start.getTime() + session.slotMinutes * 60_000),
+  };
 }
