@@ -30,8 +30,11 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
+# env files: ignore every real one, but keep the documented template.
+# Without the negation, .env.example is swallowed by .env* and nobody who clones
+# this repo ever learns which variables the app needs.
 .env*
+!.env.example
 
 # vercel
 .vercel
@@ -40,8 +43,4 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# Local environment
-.env
-.env.local
-.env*.local
 .neon
