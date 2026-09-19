@@ -19,6 +19,11 @@ const statusSchema = z.object({
   bookingId: z.uuid(),
   status: z.enum(['arrived', 'no_show', 'cancelled_by_clinic']),
   reason: z.string().trim().max(300).optional(),
+  /** Which day the desk was looking at, so we return them to it. */
+  date: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(),
 });
 
 export type ActionResult = { ok: boolean; message?: string };
@@ -34,7 +39,7 @@ export async function setBookingStatus(formData: FormData): Promise<void> {
 
   if (!parsed.success) return;
 
-  await changeBookingStatus(
+  const result = await changeBookingStatus(
     staff,
     parsed.data.bookingId,
     parsed.data.status as StaffStatus,
@@ -46,6 +51,23 @@ export async function setBookingStatus(formData: FormData): Promise<void> {
   revalidatePath('/admin');
   revalidatePath('/admin/bookings');
   revalidatePath('/book');
+
+  const said: Record<string, string> = {
+    arrived: 'Marked as arrived.',
+    no_show: 'Marked as did not come.',
+    cancelled_by_clinic: 'Booking cancelled. The slot is free again.',
+  };
+
+  const query = new URLSearchParams();
+  if (parsed.data.date) query.set('date', parsed.data.date);
+  query.set(
+    result.ok ? 'done' : 'error',
+    result.ok
+      ? (said[parsed.data.status] ?? 'Updated.')
+      : 'That booking could not be changed. Someone may have just updated it.',
+  );
+
+  redirect(`/admin?${query.toString()}`);
 }
 
 export async function signOut(): Promise<void> {

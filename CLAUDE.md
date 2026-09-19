@@ -223,6 +223,14 @@ the page guard alone secures nothing.
 - Status changes enforce the allowed-from list **in the UPDATE's WHERE clause**, so two
   receptionists clicking at once cannot both write a `booking_events` row, and a
   cancelled booking can never be revived.
+- **Today is built for the desk, not for reporting.** Arrived is the loud button
+  because it is what happens to nearly every row; Cancel is a quiet link behind a
+  confirmation step with a reason box, because it is destructive and the reason lands in
+  `booking_events`. Overdue rows tint, the next unseen patient is marked, and a
+  client-side filter finds whoever is standing at the counter without a round trip.
+- **Doctors, staff, services and promos are a list plus one open form.** Rendering every
+  record as an expanded form made a wall of inputs it was easy to type into the wrong
+  one of.
 - **Admin forms label by wrapping, not by `htmlFor`.** These screens repeat the same
   form once per row, so any id derived from the field name is duplicated down the page
   and `htmlFor` then points at the wrong control or none. `Field` in
@@ -279,9 +287,14 @@ because the reference code is short, and a failed lookup never says which half w
 ## Tests
 
 ```
-npm test        # everything; needs a database
-npm run test:unit   # pure functions only, no database
+npm test              # everything; needs a database
+npm run test:unit     # pure functions only, no database
+npm run db:clear-limits   # reset the rate-limit counters
 ```
+
+Repeated browser runs exhaust the login rate limit (10 per IP per hour) and every later
+sign-in then fails with a message that looks nothing like a rate limit. Run
+`npm run db:clear-limits` between passes.
 
 Database tests need `TEST_DATABASE_URL` pointing at a Postgres with migrations applied
 and **no seed data**. Seeded sessions would otherwise show up in availability results,

@@ -9,6 +9,7 @@ import { formatPhp } from '@/lib/money';
 
 import { saveService } from '../crud-actions';
 import { Button, Checkbox, Field, Flash, Input, PageTitle, Panel, Select, Textarea } from '../ui';
+import { ServiceTable } from './service-table';
 
 export const metadata: Metadata = { title: 'Services and prices' };
 export const dynamic = 'force-dynamic';
@@ -113,42 +114,17 @@ export default async function ServicesAdminPage({
         </form>
       </Panel>
 
-      <div className="overflow-hidden rounded border border-line bg-surface">
-        <table className="w-full text-sm">
-          <thead className="border-b border-line bg-surface-sunken text-left">
-            <tr>
-              <th scope="col" className="px-4 py-2.5 font-semibold">Name</th>
-              <th scope="col" className="px-4 py-2.5 font-semibold">Category</th>
-              <th scope="col" className="px-4 py-2.5 text-right font-semibold">Price</th>
-              <th scope="col" className="px-4 py-2.5 font-semibold">Online</th>
-              <th scope="col" className="px-4 py-2.5 font-semibold">Listed</th>
-              <th scope="col" className="px-4 py-2.5"><span className="sr-only">Edit</span></th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-line">
-            {list.map((s) => (
-              <tr key={s.id} className={s.isActive ? '' : 'opacity-50'}>
-                <td className="px-4 py-2.5">
-                  {s.name}
-                  {!s.isActive ? <span className="ml-2 text-xs text-ink-400">(inactive)</span> : null}
-                </td>
-                <td className="px-4 py-2.5 text-ink-500 capitalize">{s.category}</td>
-                <td className="px-4 py-2.5 text-right tabular-nums">{formatPhp(s.pricePhp)}</td>
-                <td className="px-4 py-2.5">{s.isBookableOnline ? 'Yes' : 'No'}</td>
-                <td className="px-4 py-2.5">{s.isListedOnline ? 'Yes' : 'No'}</td>
-                <td className="px-4 py-2.5 text-right">
-                  <a
-                    href={`/admin/services?edit=${s.id}`}
-                    className="font-semibold text-brand-700 underline underline-offset-4"
-                  >
-                    Edit
-                  </a>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <ServiceTable
+        rows={list.map((s) => ({
+          id: s.id,
+          name: s.name,
+          category: s.category,
+          price: formatPhp(s.pricePhp),
+          bookable: s.isBookableOnline,
+          listed: s.isListedOnline,
+          active: s.isActive,
+        }))}
+      />
     </div>
   );
 }
