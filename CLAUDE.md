@@ -300,6 +300,12 @@ with a booking reference that carries no order.
   service name** — "Chest X-ray" beside a name is a diagnosis hint. `getQueueTickets`
   selects those columns and no others, so the rest cannot reach the page even inside an
   unrendered prop.
+- **The announcement line is the most recent call by `called_at`, across all three
+  categories.** It first took the first category that had anything on its board, which is
+  consultation whenever consultation is busy — so calling a laboratory or imaging number
+  changed nothing on the line, and the spoken announcement, which fires on that line
+  changing, never said them at all. The dead `lastCalledId` parameter that nothing ever
+  passed is what disguised it. Covered by `queue.test.ts`.
 - **The controls are labelled with `aria-label`, not by their text.** The bar carries
   three buttons reading "Consultation": call, walk-in and undo.
 - Refreshing is `router.refresh()` every 15 seconds, so the board repaints without the

@@ -201,6 +201,7 @@ export async function getQueueTickets(db: Db, serviceDate: string): Promise<Queu
       status: queueTickets.status,
       patientName: patients.fullName,
       doctorName: doctors.fullName,
+      calledAt: queueTickets.calledAt,
     })
     .from(queueTickets)
     .leftJoin(patients, eq(patients.id, queueTickets.patientId))

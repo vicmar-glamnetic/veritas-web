@@ -10,9 +10,12 @@ function ticket(over: Partial<QueueTicketRow> & { id: string }): QueueTicketRow 
     status: 'waiting',
     patientName: 'Juan Dela Cruz',
     doctorName: null,
+    calledAt: null,
     ...over,
   };
 }
+
+const at = (iso: string) => new Date(iso);
 
 test('a ticket reads C-001, L-001, I-001', () => {
   assert.equal(formatTicket('consultation', 1), 'C-001');
@@ -74,6 +77,50 @@ test('each category keeps its own queue', () => {
       ['imaging', null],
     ],
   );
+});
+
+/*
+ * The announcement line, and with it the spoken announcement, used to take the first
+ * category that had anything on its board. That is consultation whenever consultation is
+ * busy, so calling a laboratory or imaging number announced nothing at all.
+ */
+test('the announcement follows the most recent call, in any category', () => {
+  const board = buildQueueBoard([
+    ticket({ id: 'c', category: 'consultation', number: 4, status: 'called', calledAt: at('2027-01-05T01:00:00Z') }),
+    ticket({ id: 'l', category: 'laboratory', number: 2, status: 'called', calledAt: at('2027-01-05T02:00:00Z') }),
+  ]);
+
+  assert.equal(board.lastCalled?.id, 'l');
+});
+
+test('imaging gets announced even while consultation is busy', () => {
+  const board = buildQueueBoard([
+    ticket({ id: 'c', category: 'consultation', number: 9, status: 'called', calledAt: at('2027-01-05T01:00:00Z') }),
+    ticket({ id: 'i', category: 'imaging', number: 1, status: 'called', calledAt: at('2027-01-05T03:00:00Z') }),
+  ]);
+
+  assert.equal(board.lastCalled?.id, 'i');
+  assert.equal(board.lastCalled?.category, 'imaging');
+});
+
+test('calling consultation again takes the announcement back', () => {
+  const board = buildQueueBoard([
+    ticket({ id: 'c', category: 'consultation', number: 10, status: 'called', calledAt: at('2027-01-05T04:00:00Z') }),
+    ticket({ id: 'l', category: 'laboratory', number: 2, status: 'called', calledAt: at('2027-01-05T02:00:00Z') }),
+    ticket({ id: 'i', category: 'imaging', number: 1, status: 'called', calledAt: at('2027-01-05T03:00:00Z') }),
+  ]);
+
+  assert.equal(board.lastCalled?.id, 'c');
+});
+
+test('the announcement does not flicker when two calls share a timestamp', () => {
+  const same = at('2027-01-05T05:00:00Z');
+  const rows = [
+    ticket({ id: 'a1', category: 'consultation', status: 'called', calledAt: same }),
+    ticket({ id: 'a2', category: 'laboratory', status: 'called', calledAt: same }),
+  ];
+
+  assert.equal(buildQueueBoard(rows).lastCalled?.id, buildQueueBoard([...rows].reverse()).lastCalled?.id);
 });
 
 test('an empty day renders three panels and announces nothing', () => {

@@ -43,6 +43,8 @@ export type QueueTicketRow = {
   /** Null for a walk-in whose name has not been taken. */
   patientName: string | null;
   doctorName: string | null;
+  /** When staff put this number on the board. Null until it is called. */
+  calledAt: Date | null;
 };
 
 export type QueuePanel = {
@@ -60,10 +62,7 @@ export type QueueBoard = {
   lastCalled: QueueTicketRow | null;
 };
 
-export function buildQueueBoard(
-  tickets: readonly QueueTicketRow[],
-  lastCalledId?: string | null,
-): QueueBoard {
+export function buildQueueBoard(tickets: readonly QueueTicketRow[]): QueueBoard {
   const panels: QueuePanel[] = QUEUE_CATEGORIES.map(({ key, label }) => {
     const mine = tickets.filter((t) => t.category === key);
     return {
@@ -79,12 +78,25 @@ export function buildQueueBoard(
     };
   });
 
+  /*
+   * The announcement is whichever number was called most recently, by the clock.
+   *
+   * This used to take the first category that had anything on its board, which is
+   * consultation whenever consultation is busy — so calling a laboratory or imaging
+   * number changed nothing on the announcement line, and the spoken announcement, which
+   * fires on that line changing, never said them at all.
+   *
+   * `id` breaks a tie so two calls in the same millisecond cannot make the line flicker
+   * between them on every refresh.
+   */
   const called = panels.map((p) => p.serving).filter((t): t is QueueTicketRow => t !== null);
+  const byMostRecent = [...called].sort(
+    (a, b) =>
+      (b.calledAt?.getTime() ?? 0) - (a.calledAt?.getTime() ?? 0) ||
+      (a.id < b.id ? 1 : a.id > b.id ? -1 : 0),
+  );
 
-  return {
-    panels,
-    lastCalled: called.find((t) => t.id === lastCalledId) ?? called[0] ?? null,
-  };
+  return { panels, lastCalled: byMostRecent[0] ?? null };
 }
 
 /**
