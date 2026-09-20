@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 
+import { nextAutoCategory, type QueueCategory } from '@/lib/queue';
 import { formatManilaTime } from '@/lib/time';
 
 import { callNext, issueWalkIn, recall } from './actions';
@@ -26,6 +27,10 @@ import { callNext, issueWalkIn, recall } from './actions';
 const REFRESH_MS = 15_000;
 const CLOCK_MS = 10_000;
 const VOICE_KEY = 'veritas-monitor-voice';
+const AUTO_KEY = 'veritas-monitor-auto';
+const AUTO_SECONDS_KEY = 'veritas-monitor-auto-seconds';
+const AUTO_CHOICES = [10, 30, 60, 120] as const;
+const AUTO_DEFAULT = 30;
 
 type Panel = {
   key: string;
@@ -86,6 +91,44 @@ function writeVoice(on: boolean) {
   for (const listener of voiceListeners) listener();
 }
 
+const autoListeners = new Set<() => void>();
+
+function subscribeAuto(onChange: () => void) {
+  autoListeners.add(onChange);
+  return () => {
+    autoListeners.delete(onChange);
+  };
+}
+
+function readAuto(): boolean {
+  try {
+    return window.localStorage.getItem(AUTO_KEY) === 'on';
+  } catch {
+    return false;
+  }
+}
+
+function readAutoSeconds(): number {
+  try {
+    const stored = Number(window.localStorage.getItem(AUTO_SECONDS_KEY));
+    return AUTO_CHOICES.includes(stored as (typeof AUTO_CHOICES)[number]) ? stored : AUTO_DEFAULT;
+  } catch {
+    return AUTO_DEFAULT;
+  }
+}
+
+function writeAuto(on: boolean, seconds?: number) {
+  try {
+    window.localStorage.setItem(AUTO_KEY, on ? 'on' : 'off');
+    if (seconds !== undefined) window.localStorage.setItem(AUTO_SECONDS_KEY, String(seconds));
+  } catch {
+    // Storage blocked. The toggle still works for this session.
+  }
+  for (const listener of autoListeners) listener();
+}
+
+const autoSecondsOnServer = () => AUTO_DEFAULT;
+
 const DIGIT_WORDS = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine'];
 
 /** "VRT-7K4Q" read out as letters and whole digits, not attempted as a word. */
@@ -121,6 +164,8 @@ export function MonitorBoard({
   const inClient = useSyncExternalStore(neverChanges, inBrowser, onServer);
   const voice = useSyncExternalStore(subscribeVoice, readVoice, onServer);
   const canSpeak = inClient && 'speechSynthesis' in window;
+  const auto = useSyncExternalStore(subscribeAuto, readAuto, onServer);
+  const autoSeconds = useSyncExternalStore(subscribeAuto, readAutoSeconds, autoSecondsOnServer);
 
   // Pull fresh data rather than reloading the document, so the board never blinks white
   // in front of the room. The <noscript> meta refresh below covers the other case.
@@ -184,10 +229,74 @@ export function MonitorBoard({
     }
   }, [announcement, voice, canSpeak]);
 
+  /*
+   * Auto mode.
+   *
+   * Off by default, and deliberately not on the wall screen: `showControls` is false
+   * there, and two screens both advancing the same queue on their own timers would
+   * double-call every patient.
+   *
+   * It rotates one category per tick rather than advancing all three at once, so a
+   * single number changes at a time. When nobody is waiting anywhere the timer is not
+   * armed at all, so an empty clinic is quiet rather than firing into the void.
+   */
+  const autoPrevious = useRef<QueueCategory | null>(null);
+  const autoBusy = useRef(false);
+  const anyoneWaiting = panels.some((panel) => panel.waitingCount > 0);
+
+  /*
+   * The timer reads the panels through a ref rather than taking them as a dependency.
+   *
+   * `panels` is a fresh array on every server render, and the board pulls a fresh render
+   * every 15 seconds, so depending on it tore the interval down and re-armed it four
+   * times a minute. The timer then fired on whatever was left of 15 seconds instead of
+   * the chosen gap — and at the default of 30 seconds it never fired at all, because it
+   * was reset before it ever got there. `anyoneWaiting` is a boolean for the same
+   * reason: it changes when the clinic empties, not on every refresh.
+   */
+  const latestPanels = useRef(panels);
+  useEffect(() => {
+    latestPanels.current = panels;
+  });
+
+  useEffect(() => {
+    if (!auto || !showControls || !anyoneWaiting) return;
+
+    const id = setInterval(() => {
+      // A slow round trip must not stack up calls and empty the queue in one go.
+      if (autoBusy.current) return;
+
+      const target = nextAutoCategory(
+        latestPanels.current.map((panel) => ({
+          key: panel.key as QueueCategory,
+          waitingCount: panel.waitingCount,
+        })),
+        autoPrevious.current,
+      );
+      if (!target) return;
+
+      autoBusy.current = true;
+      autoPrevious.current = target;
+
+      const body = new FormData();
+      body.set('category', target);
+      void callNext(body).finally(() => {
+        autoBusy.current = false;
+      });
+    }, autoSeconds * 1000);
+
+    return () => clearInterval(id);
+  }, [auto, autoSeconds, showControls, anyoneWaiting]);
+
   function toggleVoice() {
     const next = !voice;
     writeVoice(next);
     if (!next && canSpeak) window.speechSynthesis.cancel();
+  }
+
+  function toggleAuto() {
+    autoPrevious.current = null;
+    writeAuto(!auto);
   }
 
   return (
@@ -388,6 +497,32 @@ export function MonitorBoard({
             ))}
 
             <div className="ml-auto flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={toggleAuto}
+                aria-pressed={auto}
+                className={`rounded border px-3 py-1.5 text-xs font-medium ${
+                  auto
+                    ? 'border-brand-400 bg-brand-600 text-white'
+                    : 'border-brand-700 text-brand-100 hover:bg-brand-800'
+                }`}
+              >
+                Auto: {auto ? 'on' : 'off'}
+              </button>
+              <label className="flex items-center gap-1.5 text-xs">
+                <span className="sr-only">Seconds between automatic calls</span>
+                <select
+                  value={autoSeconds}
+                  onChange={(event) => writeAuto(auto, Number(event.target.value))}
+                  className="rounded border border-brand-700 bg-brand-800 px-2 py-1.5 text-xs text-brand-100"
+                >
+                  {AUTO_CHOICES.map((seconds) => (
+                    <option key={seconds} value={seconds}>
+                      every {seconds}s
+                    </option>
+                  ))}
+                </select>
+              </label>
               {canSpeak && (
                 <button
                   type="button"
@@ -413,6 +548,9 @@ export function MonitorBoard({
           </div>
 
           <p className="mt-3 text-xs text-brand-300">
+            {auto
+              ? `Auto is calling the next number every ${autoSeconds} seconds, one category at a time. Turn it off to call patients yourself. `
+              : ''}
             Numbers are handed out at reception when a patient is marked Arrived. Open{' '}
             <Link href="/admin/monitor?display=1" className="underline underline-offset-4">
               the wall version

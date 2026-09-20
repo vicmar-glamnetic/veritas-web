@@ -114,3 +114,32 @@ export function shortenName(fullName: string): string {
   const initial = [...parts[parts.length - 1]][0];
   return initial ? `${parts[0]} ${initial.toUpperCase()}.` : parts[0];
 }
+
+/**
+ * Which category Auto should call next.
+ *
+ * Round-robin over the categories that actually have somebody waiting, starting after
+ * whichever was called last. Rotating rather than advancing everything at once keeps one
+ * number changing at a time, which is what a board in a room should look like, and it
+ * stops a busy consultation list starving laboratory and imaging.
+ *
+ * Returns null when nobody at all is waiting, so the timer has nothing to do rather than
+ * firing pointlessly into an empty clinic.
+ */
+export function nextAutoCategory(
+  panels: readonly { key: QueueCategory; waitingCount: number }[],
+  previous: QueueCategory | null,
+): QueueCategory | null {
+  const withPeople = panels.filter((p) => p.waitingCount > 0);
+  if (withPeople.length === 0) return null;
+
+  const order = QUEUE_CATEGORIES.map((c) => c.key);
+  const start = previous ? order.indexOf(previous) + 1 : 0;
+
+  for (let step = 0; step < order.length; step++) {
+    const candidate = order[(start + step) % order.length];
+    if (withPeople.some((p) => p.key === candidate)) return candidate;
+  }
+
+  return null;
+}

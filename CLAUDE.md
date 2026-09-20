@@ -306,6 +306,15 @@ with a booking reference that carries no order.
   changed nothing on the line, and the spoken announcement, which fires on that line
   changing, never said them at all. The dead `lastCalledId` parameter that nothing ever
   passed is what disguised it. Covered by `queue.test.ts`.
+- **Auto mode is off by default and never runs on the wall screen.** It calls the next
+  number every 10, 30, 60 or 120 seconds, rotating one category per tick so a single
+  number changes at a time and a busy consultation list cannot starve the other two. It
+  is gated on `showControls`, because two screens each running their own timer would
+  double-call every patient. The timer reads the panels through a ref: `panels` is a new
+  array on every server render and the board refreshes every 15 seconds, so depending on
+  it reset the interval four times a minute — every gap became ~15s whatever was chosen,
+  and at the default of 30s it never fired at all. `nextAutoCategory` is pure and pinned
+  in `queue.test.ts`; the timing is pinned in the browser suite.
 - **The controls are labelled with `aria-label`, not by their text.** The bar carries
   three buttons reading "Consultation": call, walk-in and undo.
 - Refreshing is `router.refresh()` every 15 seconds, so the board repaints without the

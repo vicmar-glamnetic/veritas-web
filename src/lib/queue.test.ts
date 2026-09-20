@@ -1,7 +1,13 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { buildQueueBoard, formatTicket, shortenName, type QueueTicketRow } from './queue';
+import {
+  buildQueueBoard,
+  formatTicket,
+  nextAutoCategory,
+  shortenName,
+  type QueueTicketRow,
+} from './queue';
 
 function ticket(over: Partial<QueueTicketRow> & { id: string }): QueueTicketRow {
   return {
@@ -162,4 +168,37 @@ test('shortenName leaves a single name whole and tolerates rubbish', () => {
 
 test('shortenName never returns a full surname', () => {
   assert.ok(!shortenName('Juan Dela Cruz').includes('Cruz'));
+});
+
+/* Auto mode's rotation. Pure, so it can be pinned without a timer or a browser. */
+
+const panels = (c: number, l: number, i: number) => [
+  { key: 'consultation' as const, waitingCount: c },
+  { key: 'laboratory' as const, waitingCount: l },
+  { key: 'imaging' as const, waitingCount: i },
+];
+
+test('Auto rotates through the categories rather than repeating one', () => {
+  assert.equal(nextAutoCategory(panels(1, 1, 1), null), 'consultation');
+  assert.equal(nextAutoCategory(panels(1, 1, 1), 'consultation'), 'laboratory');
+  assert.equal(nextAutoCategory(panels(1, 1, 1), 'laboratory'), 'imaging');
+  assert.equal(nextAutoCategory(panels(1, 1, 1), 'imaging'), 'consultation');
+});
+
+test('Auto skips a category with nobody waiting', () => {
+  assert.equal(nextAutoCategory(panels(1, 0, 1), 'consultation'), 'imaging');
+  assert.equal(nextAutoCategory(panels(0, 0, 3), 'laboratory'), 'imaging');
+});
+
+test('a busy consultation list cannot starve the other two', () => {
+  assert.equal(nextAutoCategory(panels(9, 1, 1), 'consultation'), 'laboratory');
+});
+
+test('Auto has nothing to do when the clinic is empty', () => {
+  assert.equal(nextAutoCategory(panels(0, 0, 0), null), null);
+  assert.equal(nextAutoCategory(panels(0, 0, 0), 'imaging'), null);
+});
+
+test('Auto stays on the only category that has anyone', () => {
+  assert.equal(nextAutoCategory(panels(0, 2, 0), 'laboratory'), 'laboratory');
 });
