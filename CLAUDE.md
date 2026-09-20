@@ -315,8 +315,21 @@ with a booking reference that carries no order.
   it reset the interval four times a minute — every gap became ~15s whatever was chosen,
   and at the default of 30s it never fired at all. `nextAutoCategory` is pure and pinned
   in `queue.test.ts`; the timing is pinned in the browser suite.
-- **The controls are labelled with `aria-label`, not by their text.** The bar carries
-  three buttons reading "Consultation": call, walk-in and undo.
+- **The controls are grouped by category, not by verb.** One block per category, in the
+  same order and accent as the panels above it, holding that category's call, walk-in and
+  undo. Grouped the other way — a row of call buttons, a row of walk-in buttons, a row of
+  undo links — the word "Consultation" appeared on three buttons that did three different
+  things, told apart only by a caption at the left of each row that moved away on wrap.
+- **The buttons name the number they act on.** "Call C-015", "Undo C-014", and "No one
+  waiting" where a disabled button would otherwise sit there unexplained. Each
+  `aria-label` contains the visible text, so somebody driving the screen by voice can say
+  what they can read.
+- **Every control disables itself while its post is in flight**, through `useFormStatus`,
+  which is why the three buttons are components rather than markup: the hook reports on
+  the nearest enclosing form and only from inside it. Without it a second tap on a slow
+  connection calls a second patient, and the room sees a number nobody was ready for.
+- **The auto interval only appears once auto is on.** A dropdown governing a switched-off
+  feature is a question the desk cannot answer.
 - Refreshing is `router.refresh()` every 15 seconds, so the board repaints without the
   page flashing white in front of the room. With JavaScript off it falls back to a meta
   refresh written with `dangerouslySetInnerHTML` inside `<noscript>` — React 19 hoists a
