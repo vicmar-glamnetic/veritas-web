@@ -1,0 +1,4 @@
+ALTER TABLE "queue_tickets" ADD COLUMN "referred_from_ticket_id" uuid;--> statement-breakpoint
+ALTER TABLE "queue_tickets" ADD COLUMN "referral_note" text;--> statement-breakpoint
+ALTER TABLE "queue_tickets" ADD CONSTRAINT "queue_tickets_referred_from_ticket_id_queue_tickets_id_fk" FOREIGN KEY ("referred_from_ticket_id") REFERENCES "public"."queue_tickets"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+CREATE UNIQUE INDEX "queue_tickets_referral_key" ON "queue_tickets" USING btree ("referred_from_ticket_id","category") WHERE "queue_tickets"."referred_from_ticket_id" is not null;

@@ -3,7 +3,7 @@
  * the staff list can import the same names.
  */
 
-export type StaffRole = 'admin' | 'reception' | 'doctor' | 'laboratory' | 'imaging';
+export type StaffRole = 'admin' | 'reception' | 'doctor' | 'laboratory' | 'imaging' | 'room';
 
 export const ROLE_LABEL: Record<StaffRole, string> = {
   admin: 'Admin',
@@ -11,6 +11,7 @@ export const ROLE_LABEL: Record<StaffRole, string> = {
   doctor: 'Doctor',
   laboratory: 'Laboratory',
   imaging: 'Imaging',
+  room: 'Room account',
 };
 
 /** Admin and reception run the desk; the other roles work a room. */
@@ -23,7 +24,8 @@ export function mayWorkRoom(
   role: StaffRole,
   category: 'consultation' | 'laboratory' | 'imaging',
 ): boolean {
-  if (isDeskRole(role)) return true;
+  // A room account is fixed to its own room, which the session enforces.
+  if (isDeskRole(role) || role === 'room') return true;
   return (
     (role === 'doctor' && category === 'consultation') ||
     (role === 'laboratory' && category === 'laboratory') ||

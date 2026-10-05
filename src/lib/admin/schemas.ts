@@ -148,9 +148,11 @@ export const staffSchema = z
     id: z.uuid().optional(),
     name: trimmed(2, 120, 'Enter a name.'),
     email: z.string().trim().toLowerCase().min(1, 'Enter an email address.').max(200).pipe(z.email('That email address does not look right.')),
-    role: z.enum(['admin', 'reception', 'doctor', 'laboratory', 'imaging']),
+    role: z.enum(['admin', 'reception', 'doctor', 'laboratory', 'imaging', 'room']),
     /** Only a doctor account carries one; the database enforces it too. */
     doctorId: optionalId,
+    /** Only a room account carries one: the room it is fixed to. */
+    roomId: optionalId,
     isActive: checkbox,
     // Blank on edit means "leave the password alone".
     password: z
@@ -166,9 +168,17 @@ export const staffSchema = z
     message: 'A doctor account needs to be linked to a doctor, so it knows whose patients to call.',
     path: ['doctorId'],
   })
-  // Any other role drops the link rather than failing: the select still shows its old
-  // value when someone changes a doctor's account to reception.
-  .transform((u) => (u.role === 'doctor' ? u : { ...u, doctorId: null }));
+  .refine((u) => u.role !== 'room' || u.roomId !== null, {
+    message: 'A room account needs its room, so it always calls patients to the same place.',
+    path: ['roomId'],
+  })
+  // Other roles drop the links rather than failing: the selects still show their old
+  // values when someone changes an account's role.
+  .transform((u) => ({
+    ...u,
+    doctorId: u.role === 'doctor' ? u.doctorId : null,
+    roomId: u.role === 'room' ? u.roomId : null,
+  }));
 
 export const roomSchema = z.object({
   id: z.uuid().optional(),

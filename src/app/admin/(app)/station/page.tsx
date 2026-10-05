@@ -1,23 +1,30 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 
-import { asc, eq } from 'drizzle-orm';
+import { and, asc, eq, isNotNull } from 'drizzle-orm';
 
 import { db } from '@/db';
-import { doctors, rooms } from '@/db/schema';
+import { doctors, rooms, staffUsers } from '@/db/schema';
 import { isDeskRole, mayWorkRoom } from '@/lib/admin/roles';
 import { requireStaff } from '@/lib/auth';
-import { canRecall, compareInLine, formatTicket, QUEUE_CATEGORIES, type QueueCategory } from '@/lib/queue';
-import { getLineTickets, type StationTicket } from '@/lib/queue-service';
+import {
+  canRecall,
+  compareInLine,
+  formatTicket,
+  QUEUE_CATEGORIES,
+  type QueueCategory,
+} from '@/lib/queue';
+import { getLineTickets, getReferrals, type StationTicket } from '@/lib/queue-service';
 import { formatManilaTime, manilaDateString } from '@/lib/time';
 
-import { Field, Flash, PageTitle, Panel, Select } from '../ui';
+import { Field, Flash, Input, PageTitle, Panel, Select } from '../ui';
 import {
   callNext,
   chooseStation,
   finish,
   leaveStation,
   recall,
+  sendOn,
   skip,
   start,
   undo,
@@ -53,7 +60,7 @@ export default async function StationPage({
   const staff = await requireStaff();
   const params = await searchParams;
 
-  const [roomList, doctorList] = await Promise.all([
+  const [roomList, doctorList, ownedRooms] = await Promise.all([
     db
       .select({ id: rooms.id, name: rooms.name, category: rooms.category })
       .from(rooms)
@@ -64,25 +71,53 @@ export default async function StationPage({
       .from(doctors)
       .where(eq(doctors.isActive, true))
       .orderBy(asc(doctors.sortOrder), asc(doctors.fullName)),
+    // Rooms that have their own room account, which nobody else may pick.
+    db
+      .select({ roomId: staffUsers.roomId })
+      .from(staffUsers)
+      .where(and(isNotNull(staffUsers.roomId), eq(staffUsers.isActive, true))),
   ]);
+  const owned = new Set(ownedRooms.map((r) => r.roomId));
 
-  const allowed = roomList.filter((r) => mayWorkRoom(staff.role, r.category as QueueCategory));
-  const room = staff.roomId ? roomList.find((r) => r.id === staff.roomId) : undefined;
+  // A room account sees only its own room; everyone else the rooms their role may work.
+  const allowed = staff.roomFixed
+    ? roomList.filter((r) => r.id === staff.roomId)
+    : roomList.filter(
+        (r) => mayWorkRoom(staff.role, r.category as QueueCategory) && !owned.has(r.id),
+      );
+  // A room chosen before it got its own room account no longer counts.
+  const room =
+    staff.roomId && (staff.roomFixed || !owned.has(staff.roomId))
+      ? roomList.find((r) => r.id === staff.roomId)
+      : undefined;
   const lineDoctorId = staff.role === 'doctor' ? staff.doctorId : staff.stationDoctorId;
   const needsDoctor = room?.category === 'consultation' && !lineDoctorId;
+  // A room account never changes room. In a consultation room it still says whose patients.
+  const canChangeDoctor = room?.category === 'consultation' && staff.role !== 'doctor';
+  const canChange = !staff.roomFixed || canChangeDoctor;
 
-  if (!room || needsDoctor || params.change === '1') {
+  if (!room || needsDoctor || (params.change === '1' && canChange)) {
     return (
       <div className="space-y-6">
         <Flash done={params.done} error={params.error} />
         <PageTitle
-          title="Which room are you in?"
-          lead="Patients you call will be sent to this room on the waiting room screen. You choose once each time you sign in."
+          title={
+            staff.roomFixed ? 'Whose patients is this room calling?' : 'Which room are you in?'
+          }
+          lead={
+            staff.roomFixed
+              ? 'This is a room account, fixed to its room. Pick the doctor working here today.'
+              : 'Patients you call will be sent to this room on the waiting room screen. You choose once each time you sign in.'
+          }
         />
         <Panel>
           {allowed.length === 0 ? (
             <p className="text-sm text-ink-500">
-              There are no rooms you can work yet.{' '}
+              {roomList.some(
+                (r) => owned.has(r.id) && mayWorkRoom(staff.role, r.category as QueueCategory),
+              )
+                ? 'Every room you could work has its own room account. Use the screen in that room. '
+                : 'There are no rooms you can work yet. '}
               {isDeskRole(staff.role) ? (
                 <Link href="/admin/rooms" className="text-brand-700 underline underline-offset-4">
                   Add the clinic’s rooms
@@ -131,7 +166,10 @@ export default async function StationPage({
               <div className="flex flex-wrap items-center gap-4">
                 <SubmitButton pendingLabel="Saving…">Use this room</SubmitButton>
                 {room && !needsDoctor ? (
-                  <Link href="/admin/station" className="text-sm text-brand-700 underline underline-offset-4">
+                  <Link
+                    href="/admin/station"
+                    className="text-sm text-brand-700 underline underline-offset-4"
+                  >
                     Stay in {room.name}
                   </Link>
                 ) : null}
@@ -147,6 +185,9 @@ export default async function StationPage({
   const doctorName = lineDoctorId ? doctorList.find((d) => d.id === lineDoctorId)?.fullName : null;
   const view = await loadLine(category, category === 'consultation' ? lineDoctorId : null, room.id);
   const { current, waiting, skipped, elsewhere } = view;
+  const sentOn = current?.startedAt ? await getReferrals(db, current.id) : [];
+  // Where this room can send a patient: every other department.
+  const onward = QUEUE_CATEGORIES.filter((c) => c.key !== category);
   const upNext = waiting[0];
 
   return (
@@ -165,17 +206,23 @@ export default async function StationPage({
           ) : null}
         </div>
         <div className="flex items-center gap-3 text-sm">
-          <Link
-            href="/admin/station?change=1"
-            className="rounded border border-line-strong bg-surface px-3 py-2 font-medium text-ink-900 hover:bg-surface-sunken"
-          >
-            Change room
-          </Link>
-          <form action={leaveStation}>
-            <SubmitButton tone="quiet" pendingLabel="Leaving…">
-              Leave room
-            </SubmitButton>
-          </form>
+          {canChange ? (
+            <Link
+              href="/admin/station?change=1"
+              className="rounded border border-line-strong bg-surface px-3 py-2 font-medium text-ink-900 hover:bg-surface-sunken"
+            >
+              {staff.roomFixed ? 'Change doctor' : 'Change room'}
+            </Link>
+          ) : null}
+          {staff.roomFixed ? (
+            <span className="text-ink-500">Room account</span>
+          ) : (
+            <form action={leaveStation}>
+              <SubmitButton tone="quiet" pendingLabel="Leaving…">
+                Leave room
+              </SubmitButton>
+            </form>
+          )}
         </div>
       </div>
 
@@ -189,7 +236,7 @@ export default async function StationPage({
               </p>
               <p className="mt-2 text-lg text-ink-900">{current.patientName ?? 'No name taken'}</p>
               <p className="text-sm text-ink-500">
-                {current.serviceName ?? (current.isWalkIn ? 'Walk-in' : '')}
+                {describe(current)}
                 {current.recalledAt ? ' · back after being skipped' : ''}
               </p>
               <p className="mt-2 text-sm font-medium text-ink-700">
@@ -230,6 +277,48 @@ export default async function StationPage({
                 </>
               )}
             </div>
+
+            {/*
+             * Sending on. Only once they are in the room, because only somebody who has
+             * been seen can be sent for tests. Each department gives its own number.
+             */}
+            {current.startedAt ? (
+              <div className="w-full border-t border-line pt-4">
+                <h2 className="text-sm font-semibold text-ink-900">Send them on</h2>
+                <p className="mt-0.5 text-sm text-ink-500">
+                  A new number in that department, for the same patient. Tell them the number before
+                  they leave.
+                </p>
+                {sentOn.length > 0 ? (
+                  <p className="mt-2 text-sm font-medium text-brand-800">
+                    Already given:{' '}
+                    {sentOn.map((t) => (
+                      <span key={t.id} className="mr-2 font-mono tabular-nums">
+                        {formatTicket(t.category, t.number)}
+                      </span>
+                    ))}
+                  </p>
+                ) : null}
+                <div className="mt-3 grid gap-4 sm:grid-cols-2">
+                  {onward
+                    .filter((c) => !sentOn.some((t) => t.category === c.key))
+                    .map((c) => (
+                      <form key={c.key} action={sendOn} className="flex flex-col gap-2">
+                        <input type="hidden" name="category" value={c.key} />
+                        <Field
+                          label={`For ${c.label.toLowerCase()}`}
+                          hint="Optional. What it is for, e.g. CBC, FBS."
+                        >
+                          <Input name="note" maxLength={200} autoComplete="off" />
+                        </Field>
+                        <SubmitButton tone="secondary" pendingLabel="Issuing…">
+                          Send to {c.label.toLowerCase()}
+                        </SubmitButton>
+                      </form>
+                    ))}
+                </div>
+              </div>
+            ) : null}
           </div>
         ) : (
           <div className="flex flex-wrap items-center justify-between gap-6">
@@ -269,15 +358,23 @@ export default async function StationPage({
       </section>
 
       <div className="grid gap-6 lg:grid-cols-[1.4fr_1fr]">
-        <Panel title={`Waiting (${waiting.length})`} description="In the order they will be called.">
+        <Panel
+          title={`Waiting (${waiting.length})`}
+          description="In the order they will be called."
+        >
           {waiting.length === 0 ? (
             <p className="text-sm text-ink-500">Nobody waiting.</p>
           ) : (
             <ol className="divide-y divide-line">
               {waiting.map((t, i) => (
-                <li key={t.id} className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 py-2.5">
+                <li
+                  key={t.id}
+                  className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 py-2.5"
+                >
                   <span className="flex items-baseline gap-3">
-                    <span className="w-5 text-right text-xs text-ink-400 tabular-nums">{i + 1}</span>
+                    <span className="w-5 text-right text-xs text-ink-400 tabular-nums">
+                      {i + 1}
+                    </span>
                     <span className="font-mono font-semibold text-ink-900 tabular-nums">
                       {formatTicket(t.category, t.number)}
                     </span>
@@ -289,8 +386,10 @@ export default async function StationPage({
                         Back from skip
                       </span>
                     ) : null}
-                    {t.serviceName ?? (t.isWalkIn ? 'Walk-in' : '')}
-                    {category === 'consultation' && t.isWalkIn && !t.doctorId ? ' · any doctor' : ''}
+                    {describe(t)}
+                    {category === 'consultation' && t.isWalkIn && !t.doctorId
+                      ? ' · any doctor'
+                      : ''}
                   </span>
                 </li>
               ))}
@@ -308,7 +407,10 @@ export default async function StationPage({
             ) : (
               <ul className="divide-y divide-line">
                 {skipped.map((t) => (
-                  <li key={t.id} className="flex flex-wrap items-center justify-between gap-3 py-2.5">
+                  <li
+                    key={t.id}
+                    className="flex flex-wrap items-center justify-between gap-3 py-2.5"
+                  >
                     <span>
                       <span className="font-mono font-semibold text-ink-900 tabular-nums">
                         {formatTicket(t.category, t.number)}
@@ -357,7 +459,6 @@ export default async function StationPage({
   );
 }
 
-
 type Shown = StationTicket & { calledLabel: string; startedLabel: string };
 
 /**
@@ -377,8 +478,20 @@ async function loadLine(category: QueueCategory, doctorId: string | null, roomId
       const mine = tickets.find((t) => t.status === 'called' && t.roomId === roomId);
       return mine ? label(mine) : null;
     })(),
-    waiting: tickets.filter((t) => t.status === 'waiting').sort(compareInLine).map(label),
+    waiting: tickets
+      .filter((t) => t.status === 'waiting')
+      .sort(compareInLine)
+      .map(label),
     skipped: tickets.filter((t) => t.status === 'skipped').map(label),
     elsewhere: tickets.filter((t) => t.status === 'called' && t.roomId !== roomId),
   };
+}
+
+/** What a ticket is for: the booked service, where it was sent from and why, or walk-in. */
+function describe(t: StationTicket): string {
+  if (t.referredFrom) {
+    const from = `From ${formatTicket(t.referredFrom.category, t.referredFrom.number)}`;
+    return t.referralNote ? `${from} · ${t.referralNote}` : from;
+  }
+  return t.serviceName ?? (t.isWalkIn ? 'Walk-in' : '');
 }

@@ -37,8 +37,13 @@ export type Staff = {
   doctorId: string | null;
   /** This sign-in session, so the station screen can record which room it is in. */
   sessionId: string;
-  /** The room chosen on the station screen for this session, if any. */
+  /**
+   * The room this person is working: a room account's fixed room, otherwise the one
+   * chosen on the station screen for this session, if any.
+   */
   roomId: string | null;
+  /** True for a room account, whose room cannot be changed. */
+  roomFixed: boolean;
   /** Whose consultation line this session calls, for a consultation room. */
   stationDoctorId: string | null;
 };
@@ -94,6 +99,7 @@ export const getCurrentStaff = cache(async (): Promise<Staff | null> => {
       email: staffUsers.email,
       role: staffUsers.role,
       doctorId: staffUsers.doctorId,
+      fixedRoomId: staffUsers.roomId,
       isActive: staffUsers.isActive,
       sessionId: staffSessions.id,
       roomId: staffSessions.roomId,
@@ -120,7 +126,8 @@ export const getCurrentStaff = cache(async (): Promise<Staff | null> => {
     role: row.role,
     doctorId: row.doctorId,
     sessionId: row.sessionId,
-    roomId: row.roomId,
+    roomId: row.fixedRoomId ?? row.roomId,
+    roomFixed: row.fixedRoomId !== null,
     stationDoctorId: row.stationDoctorId,
   };
 });

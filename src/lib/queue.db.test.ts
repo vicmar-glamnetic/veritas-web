@@ -14,6 +14,7 @@ import {
   getQueueTickets,
   issueWalkInTicket,
   recallSkipped,
+  referTicket,
   skipTicket,
   startTicket,
   undoCall,
@@ -343,6 +344,78 @@ describe('skip and recall', () => {
     const four = board.find((t) => t.category === 'imaging' && t.number === 4);
     assert.equal(four?.status, 'waiting');
     assert.equal(four?.roomName, null);
+  });
+});
+
+describe('sending a patient on to another department', () => {
+  const send = (roomId: string, category: 'consultation' | 'laboratory' | 'imaging') =>
+    referTicket(db, { roomId, serviceDate: DATE_E, category, note: 'CBC, FBS', staffId: null });
+
+  it('only sends somebody who has been seen', async () => {
+    // consult2 has Santos' patient on the board from above, not yet started.
+    assert.deepEqual(await send(consult2, 'laboratory'), { ok: false, reason: 'nobody_in_room' });
+  });
+
+  it('gives a new L- number for the same patient, linked to the consultation', async () => {
+    await startTicket(db, consult2);
+    const result = await send(consult2, 'laboratory');
+    assert.ok(result.ok);
+    assert.equal(result.ticket.category, 'laboratory');
+
+    const [sent] = await db
+      .select({
+        from: queueTickets.referredFromTicketId,
+        note: queueTickets.referralNote,
+        status: queueTickets.status,
+        doctorId: queueTickets.doctorId,
+      })
+      .from(queueTickets)
+      .where(eq(queueTickets.id, result.ticket.id));
+    const [consultation] = await db
+      .select({ id: queueTickets.id })
+      .from(queueTickets)
+      .where(and(eq(queueTickets.roomId, consult2), eq(queueTickets.status, 'called')));
+
+    assert.equal(sent.from, consultation.id);
+    assert.equal(sent.note, 'CBC, FBS');
+    assert.equal(sent.status, 'waiting');
+    assert.equal(sent.doctorId, null, 'the laboratory line has no doctor');
+  });
+
+  it('refuses a second number for the same department, even on a double tap', async () => {
+    await warmPool(pool, 2);
+    const results = await Promise.all([send(consult2, 'imaging'), send(consult2, 'imaging')]);
+    assert.equal(results.filter((r) => r.ok).length, 1, 'exactly one I- number');
+    assert.deepEqual(await send(consult2, 'laboratory'), { ok: false, reason: 'already_sent' });
+  });
+
+  it('does not send a patient to the department they are already in', async () => {
+    assert.deepEqual(await send(consult2, 'consultation'), { ok: false, reason: 'same_department' });
+  });
+
+  it('will not give the visit a second I- number from the laboratory', async () => {
+    await finishTicket(db, consult2);
+    // L-001 on DATE_E is the one the consultation issued; it already has an I- too.
+    assert.equal(numberOf(await call(DATE_E, lab2)), 1);
+    await startTicket(db, lab2);
+    assert.deepEqual(await send(lab2, 'imaging'), { ok: false, reason: 'already_sent' });
+    await finishTicket(db, lab2);
+  });
+
+  it('lets the laboratory send them on to imaging when the doctor did not', async () => {
+    // A fresh visit: Reyes sends a first-available walk-in to the laboratory only.
+    await walkIn(DATE_E, 'consultation', reyes);
+    assert.ok((await call(DATE_E, consult1, reyes)).ok);
+    await startTicket(db, consult1);
+    const toLab = await send(consult1, 'laboratory');
+    assert.ok(toLab.ok);
+    await finishTicket(db, consult1);
+
+    assert.equal(numberOf(await call(DATE_E, lab1)), toLab.ok ? toLab.ticket.number : -1);
+    await startTicket(db, lab1);
+    const toImaging = await send(lab1, 'imaging');
+    assert.ok(toImaging.ok, 'consultation → laboratory → imaging');
+    await finishTicket(db, lab1);
   });
 });
 

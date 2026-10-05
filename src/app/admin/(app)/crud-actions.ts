@@ -230,7 +230,9 @@ export async function saveStaff(formData: FormData): Promise<void> {
         '/admin/staff',
         constraint === 'staff_users_doctor_key'
           ? 'That doctor already has an account. Each doctor signs in with their own one.'
-          : 'That email address already has an account.',
+          : constraint === 'staff_users_room_key'
+            ? 'That room already has a room account. Each room has one, so two screens cannot claim it.'
+            : 'That email address already has an account.',
         true,
       );
     }
@@ -414,6 +416,14 @@ export async function deleteRoom(formData: FormData): Promise<void> {
     .select({ n: sql<number>`count(*)::int` })
     .from(queueTickets)
     .where(eq(queueTickets.roomId, id));
+
+  const [account] = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(staffUsers)
+    .where(eq(staffUsers.roomId, id));
+  if ((account?.n ?? 0) > 0) {
+    back('/admin/rooms', 'This room has a room account. Delete or change that account first.', true);
+  }
 
   if ((used?.n ?? 0) > 0) {
     back(

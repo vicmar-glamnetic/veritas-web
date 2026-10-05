@@ -1,4 +1,5 @@
-import { and, asc, eq, isNull, lt, or, sql } from 'drizzle-orm';
+import { and, asc, eq, isNotNull, isNull, lt, or, sql } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/pg-core';
 import type { PgTransaction } from 'drizzle-orm/pg-core';
 
 import type { Db } from '@/db/client';
@@ -369,6 +370,118 @@ export async function recallSkipped(db: Db, ticketId: string): Promise<boolean> 
   return rows.length > 0;
 }
 
+export type ReferResult =
+  | { ok: true; ticket: IssuedTicket }
+  | { ok: false; reason: 'nobody_in_room' | 'same_department' | 'already_sent' };
+
+/**
+ * Send the patient in this room on to another department, with a new number there.
+ *
+ * C- is consultation, L- laboratory, I- imaging, and a patient who needs more than one
+ * gets a number from each: the doctor sends them to the laboratory, the laboratory sends
+ * them on to imaging. The new ticket carries the same patient and points back at the one
+ * it came from, so the numbers stay one visit.
+ *
+ * Only for somebody already started in this room: the doctor has seen them. The new
+ * number joins the back of its line in issue order, like any other.
+ *
+ * One open number per department per visit. A visit is the chain of tickets linked by
+ * `referred_from_ticket_id`: the doctor sending someone to the laboratory and imaging,
+ * and the laboratory then trying to send them to imaging too, must not give them a
+ * second I- number. That is checked across the whole chain here; the unique index on
+ * (referred_from_ticket_id, category) is the backstop that makes a double tap on the same
+ * button safe even when the two requests interleave.
+ */
+export async function referTicket(
+  db: Db,
+  input: {
+    roomId: string;
+    serviceDate: string;
+    category: QueueCategory;
+    note: string | null;
+    staffId: string | null;
+  },
+): Promise<ReferResult> {
+  try {
+    return await db.transaction(async (tx): Promise<ReferResult> => {
+      const [current] = await tx
+        .select({
+          id: queueTickets.id,
+          category: queueTickets.category,
+          patientId: queueTickets.patientId,
+        })
+        .from(queueTickets)
+        .where(
+          and(
+            eq(queueTickets.roomId, input.roomId),
+            eq(queueTickets.status, 'called'),
+            isNotNull(queueTickets.startedAt),
+          ),
+        )
+        .limit(1)
+        .for('update');
+
+      if (!current) return { ok: false, reason: 'nobody_in_room' };
+      if (current.category === input.category) return { ok: false, reason: 'same_department' };
+
+      // Up the chain to where the visit started, then down every branch of it.
+      const open = await tx.execute(sql`
+        with recursive up as (
+          select id, referred_from_ticket_id from queue_tickets where id = ${current.id}
+          union all
+          select q.id, q.referred_from_ticket_id
+            from queue_tickets q join up on q.id = up.referred_from_ticket_id
+        ),
+        visit as (
+          select id, category, status from queue_tickets
+           where id in (select id from up where referred_from_ticket_id is null)
+          union all
+          select q.id, q.category, q.status
+            from queue_tickets q join visit v on q.referred_from_ticket_id = v.id
+        )
+        select 1 from visit
+         where category = ${input.category} and status in ('waiting', 'called')
+         limit 1`);
+      if (open.rows.length > 0) return { ok: false, reason: 'already_sent' };
+
+      const number = await nextNumber(tx, input.serviceDate, input.category);
+      const [ticket] = await tx
+        .insert(queueTickets)
+        .values({
+          serviceDate: input.serviceDate,
+          category: input.category,
+          number,
+          patientId: current.patientId,
+          referredFromTicketId: current.id,
+          referralNote: input.note,
+          issuedByStaffUserId: input.staffId,
+        })
+        .returning({
+          id: queueTickets.id,
+          category: queueTickets.category,
+          number: queueTickets.number,
+        });
+
+      return { ok: true, ticket: ticket as IssuedTicket };
+    });
+  } catch (error) {
+    if (isUniqueViolation(error, 'queue_tickets_referral_key')) {
+      return { ok: false, reason: 'already_sent' };
+    }
+    throw error;
+  }
+}
+
+/** The onward numbers already issued from a ticket, for the room that sent them. */
+export async function getReferrals(db: Db, ticketId: string): Promise<IssuedTicket[]> {
+  const rows = await db
+    .select({ id: queueTickets.id, category: queueTickets.category, number: queueTickets.number })
+    .from(queueTickets)
+    .where(eq(queueTickets.referredFromTicketId, ticketId))
+    .orderBy(asc(queueTickets.category));
+  return rows as IssuedTicket[];
+}
+
 /* -------------------------------------------------------------------------- */
 /* Reading                                                                    */
 /* -------------------------------------------------------------------------- */
@@ -421,6 +534,9 @@ export type StationTicket = {
   calledAt: Date | null;
   startedAt: Date | null;
   recalledAt: Date | null;
+  /** Where they were sent from, e.g. C-002, and what for. Null if they came from the desk. */
+  referredFrom: { category: QueueCategory; number: number } | null;
+  referralNote: string | null;
 };
 
 /**
@@ -428,6 +544,9 @@ export type StationTicket = {
  * room. Staff-only, so it carries the full name and the booked service, which the doctor
  * needs and the wall must never get.
  */
+/** The ticket a referral came from, joined under its own name. */
+const sender = alias(queueTickets, 'sender');
+
 export async function getLineTickets(
   db: Db,
   serviceDate: string,
@@ -449,9 +568,13 @@ export async function getLineTickets(
       calledAt: queueTickets.calledAt,
       startedAt: queueTickets.startedAt,
       recalledAt: queueTickets.recalledAt,
+      referralNote: queueTickets.referralNote,
+      fromCategory: sender.category,
+      fromNumber: sender.number,
     })
     .from(queueTickets)
     .leftJoin(patients, eq(patients.id, queueTickets.patientId))
+    .leftJoin(sender, eq(sender.id, queueTickets.referredFromTicketId))
     .leftJoin(bookings, eq(bookings.id, queueTickets.bookingId))
     .leftJoin(services, eq(services.id, bookings.serviceId))
     .leftJoin(rooms, eq(rooms.id, queueTickets.roomId))
@@ -465,8 +588,11 @@ export async function getLineTickets(
     )
     .orderBy(asc(queueTickets.number));
 
-  return rows.map(({ bookingId, ...row }) => ({
+  return rows.map(({ bookingId, fromCategory, fromNumber, ...row }) => ({
     ...row,
-    isWalkIn: bookingId === null,
+    // Sent on from another room is not a walk-in, even though it has no booking.
+    isWalkIn: bookingId === null && fromNumber === null,
+    referredFrom:
+      fromCategory && fromNumber !== null ? { category: fromCategory, number: fromNumber } : null,
   })) as StationTicket[];
 }

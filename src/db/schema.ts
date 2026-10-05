@@ -65,6 +65,10 @@ export const bookingActor = pgEnum('booking_actor', ['patient', 'staff', 'system
  * `doctor`, `laboratory` and `imaging` work a room: they call, start and finish patients
  * on the station screen and see nothing of the booking admin. A `doctor` account is tied
  * to one row in `doctors`, which is what decides whose line it calls from.
+ *
+ * `room` is a login that belongs to one room rather than to a person — the tablet in
+ * Consultation Room 2, the PC in Phlebotomy. It is fixed to that room and cannot move,
+ * and each room has at most one, so two screens can never fight over which room they are.
  */
 export const staffRole = pgEnum('staff_role', [
   'admin',
@@ -72,6 +76,7 @@ export const staffRole = pgEnum('staff_role', [
   'doctor',
   'laboratory',
   'imaging',
+  'room',
 ]);
 
 /**
@@ -446,6 +451,8 @@ export const staffUsers = pgTable(
     role: staffRole('role').notNull().default('reception'),
     /** Set for `doctor` accounts only: whose consultation line this login calls from. */
     doctorId: uuid('doctor_id').references(() => doctors.id, { onDelete: 'restrict' }),
+    /** Set for `room` accounts only: the one room this login works, fixed. */
+    roomId: uuid('room_id').references(() => rooms.id, { onDelete: 'restrict' }),
     isActive: boolean('is_active').notNull().default(true),
     lastLoginAt: timestamp('last_login_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
@@ -454,6 +461,9 @@ export const staffUsers = pgTable(
     uniqueIndex('staff_users_email_key').on(t.email),
     // One login per doctor, so "Dra. Reyes' line" always means one person's screen.
     uniqueIndex('staff_users_doctor_key').on(t.doctorId),
+    // One room account per room.
+    uniqueIndex('staff_users_room_key').on(t.roomId),
+    check('staff_users_room_role', sql`(${t.role}::text = 'room') = (${t.roomId} is not null)`),
     check(
       'staff_users_doctor_role',
       // Compared as text: Postgres refuses to use an enum value in the same transaction
@@ -607,6 +617,25 @@ export const queueTickets = pgTable(
      * the once-only guard: a ticket with this set cannot be recalled again.
      */
     recalledAt: timestamp('recalled_at', { withTimezone: true }),
+    /**
+     * The ticket this one was sent on from: a consultation that sent the patient to the
+     * laboratory, or the laboratory that sent them to imaging. Each department gives its
+     * own number (C-, L-, I-), and this link is what keeps them one visit, so a result can
+     * later find the consultation that asked for it.
+     */
+    // `no action` rather than `restrict`: it is checked at the end of the statement, so
+    // clearing a whole day's tickets in one DELETE works, while deleting a ticket that
+    // something was sent on from, on its own, is still refused.
+    referredFromTicketId: uuid('referred_from_ticket_id').references(
+      (): AnyPgColumn => queueTickets.id,
+      { onDelete: 'no action' },
+    ),
+    /**
+     * What the patient was sent for, in the sender's words: "CBC, FBS", "Chest PA". Staff
+     * screens only. Never selected for the board: a test name beside a name is a
+     * diagnosis hint.
+     */
+    referralNote: text('referral_note'),
     issuedByStaffUserId: uuid('issued_by_staff_user_id').references(() => staffUsers.id, {
       onDelete: 'restrict',
     }),
@@ -620,6 +649,11 @@ export const queueTickets = pgTable(
     uniqueIndex('queue_tickets_number_key').on(t.serviceDate, t.category, t.number),
     // One ticket per booking. Nulls are distinct in Postgres, so walk-ins are unaffected.
     uniqueIndex('queue_tickets_booking_key').on(t.bookingId),
+    // One onward number per department per ticket, so a double tap on "Send to
+    // laboratory" cannot hand the patient two L- numbers.
+    uniqueIndex('queue_tickets_referral_key')
+      .on(t.referredFromTicketId, t.category)
+      .where(sql`${t.referredFromTicketId} is not null`),
     index('queue_tickets_board_idx').on(t.serviceDate, t.category, t.status),
     index('queue_tickets_line_idx').on(t.serviceDate, t.category, t.doctorId, t.status),
     // One patient per room at a time. Two people pressing Call next in the same room at

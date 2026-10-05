@@ -118,6 +118,24 @@ describe('staff roles and the doctor link', () => {
   });
 });
 
+describe('room accounts', () => {
+  const base = { name: 'Phlebotomy PC', email: 'phlebotomy@example.com', password: 'long-enough-1', isActive: 'on' };
+
+  it('refuses a room account with no room', () => {
+    assert.equal(staffSchema.safeParse({ ...base, role: 'room', roomId: '' }).success, false);
+  });
+
+  it('keeps the room on a room account and drops it from any other role', () => {
+    const room = staffSchema.safeParse({ ...base, role: 'room', roomId: DOCTOR_ID });
+    assert.ok(room.success);
+    assert.equal(room.data.roomId, DOCTOR_ID);
+
+    const reception = staffSchema.safeParse({ ...base, role: 'reception', roomId: DOCTOR_ID });
+    assert.ok(reception.success);
+    assert.equal(reception.data.roomId, null);
+  });
+});
+
 describe('rooms and walk-ins', () => {
   it('accepts a room with Active unticked', () => {
     const r = roomSchema.safeParse({ name: 'X-ray Room', category: 'imaging', sortOrder: '1' });

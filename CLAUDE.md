@@ -165,9 +165,9 @@ Queue display and queue numbering were on this list until the client asked for t
 What exists now is described under "The queue and the waiting room board": reception
 issues numbers, each room calls its own line, the board shows them with the room. Still
 not built, and still a later phase: the cashier step (the client wants it **last**, after
-the doctor has decided what tests are needed), doctor orders issuing L-/I- numbers,
-printed tickets, transfers between rooms, priority patients, and any reporting on
-waiting times.
+the doctor has decided what tests are needed), structured test orders (today a referral
+carries a free-text note), printed tickets, transfers between rooms of the same kind,
+priority patients, and any reporting on waiting times.
 
 ## Commands
 
@@ -315,6 +315,19 @@ with a booking reference that carries no order.
   its screen, which shows only today, says it is free.
 - **Call → Start → Finish.** `started_at` is when the patient walked in, so waiting and
   service time can be reported later. Skip and Undo are only allowed before Start.
+- **C- is consultation, L- laboratory, I- imaging, and a patient can hold one of each.**
+  After Start, a room can "Send them on": a new number in another department for the same
+  patient, with `referred_from_ticket_id` pointing back and an optional staff-only
+  `referral_note` ("CBC, FBS"). The chain of referrals is one visit. A visit gets at most
+  one open number per department, checked across the chain; the unique index on
+  `(referred_from_ticket_id, category)` makes a double tap safe. The note never reaches
+  the board. The self-reference is `on delete no action`, not `restrict`, so a whole
+  day's tickets can be deleted in one statement.
+- **Room accounts** (`role = 'room'`, `staff_users.room_id`, unique) belong to a room,
+  not a person: the tablet in Consultation Room 2. Fixed to that room, they never choose
+  or leave it; a consultation room account still picks whose patients each sign-in. A
+  room with an active room account is hidden from everyone else's room picker and
+  refused by the station actions, so two screens never work one room.
 - **Skipped patients go to the front, once** (the client's answer). `recalled_at` is both
   the ordering (`recalled_at nulls last, number`; `compareInLine` is the pure twin) and
   the once-only guard, enforced in the UPDATE's WHERE clause.

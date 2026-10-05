@@ -22,6 +22,20 @@
       "when": 1791177564420,
       "tag": "0002_rooms_and_lines",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1791179894013,
+      "tag": "0003_ticket_referrals",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1791180088569,
+      "tag": "0004_room_accounts",
+      "breakpoints": true
     }
   ]
 }

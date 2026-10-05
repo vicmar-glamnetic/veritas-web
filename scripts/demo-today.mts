@@ -32,10 +32,19 @@ const DEMO_MOBILE_PREFIX = '+63917555099';
  */
 const DEMO_EMAIL = 'delivered@resend.dev';
 
-// Tickets point at bookings with on delete restrict, so they go first.
+// Tickets point at bookings with on delete restrict, so they go first — together with
+// any laboratory or imaging numbers they were sent on to, which have no booking of
+// their own. One statement, so the self-reference is checked once, at the end.
 await pool.query(
-  `delete from queue_tickets t using bookings b, patients p
-    where t.booking_id = b.id and b.patient_id = p.id and p.email = $1`,
+  `with recursive demo as (
+     select t.id from queue_tickets t
+       join bookings b on b.id = t.booking_id
+       join patients p on p.id = b.patient_id
+      where p.email = $1
+     union
+     select c.id from queue_tickets c join demo d on c.referred_from_ticket_id = d.id
+   )
+   delete from queue_tickets where id in (select id from demo)`,
   [DEMO_EMAIL],
 );
 const previous = await pool.query(

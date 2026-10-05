@@ -165,7 +165,7 @@ service_category  consultation | laboratory | imaging
 booking_status    booked | cancelled_by_patient | cancelled_by_clinic | arrived | no_show
 booking_actor     patient | staff | system
 patient_source    online | walkin
-staff_role        admin | reception | doctor | laboratory | imaging
+staff_role        admin | reception | doctor | laboratory | imaging | room
 queue_status      waiting | called | done | skipped
 ```
 
@@ -476,6 +476,14 @@ nobody drops off the board without staff saying what happened to them. Two rooms
 line pressing Call at once get two different patients (`FOR UPDATE SKIP LOCKED`, the
 status re-checked in the UPDATE), and a partial unique index allows one called ticket per
 room. A call left on the board from an earlier day is closed before the next call.
+
+**Sending on.** After Start, a room can send the patient to another department with a new
+number there — C- consultation, L- laboratory, I- imaging — linked back to the ticket it
+came from, with an optional staff-only note. Consultation → laboratory → imaging is one
+visit, with at most one open number per department.
+
+**Room accounts.** A `room` login is fixed to one room and is the only screen that may
+work it, so two screens never call into the same room.
 
 **Skip and recall, once.** A called patient who does not come is skipped. If they turn up,
 Recall puts them at the front of their line; `recalled_at` is both the ordering and the
