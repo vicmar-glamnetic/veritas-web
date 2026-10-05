@@ -8,7 +8,7 @@ import type { Staff } from '@/lib/auth';
 import { formatTicket, type QueueCategory } from '@/lib/queue';
 import { manilaDateString } from '@/lib/time';
 
-import { issueTicketForBooking } from '../queue-service';
+import { cancelTicketForBooking, issueTicketForBooking } from '../queue-service';
 
 /**
  * Staff-driven status changes.
@@ -96,6 +96,12 @@ export async function changeBookingStatus(
         staffId: staff.id,
       });
       ticket = formatTicket(issued.category, issued.number);
+    }
+
+    // Cancelled or not come after all: their number leaves the board and the lists, so
+    // the wall's Next shows only people who are actually waiting.
+    if (to === 'no_show' || to === 'cancelled_by_clinic') {
+      await cancelTicketForBooking(tx, bookingId);
     }
 
     return { ok: true, from: current.status, to, ticket };

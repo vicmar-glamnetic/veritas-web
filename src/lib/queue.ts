@@ -39,7 +39,7 @@ export type QueueTicketRow = {
   id: string;
   category: QueueCategory;
   number: number;
-  status: 'waiting' | 'called' | 'done' | 'skipped';
+  status: 'waiting' | 'called' | 'done' | 'skipped' | 'cancelled';
   /** Null for a walk-in whose name has not been taken. */
   patientName: string | null;
   /** Whose line a consultation is in. Null for "first available doctor", and for L/I. */

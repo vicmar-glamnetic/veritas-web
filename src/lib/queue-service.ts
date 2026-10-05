@@ -1,4 +1,4 @@
-import { and, asc, eq, isNotNull, isNull, lt, or, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNotNull, isNull, lt, or, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import type { PgTransaction } from 'drizzle-orm/pg-core';
 
@@ -29,6 +29,16 @@ type Tx = PgTransaction<any, any, any>;
 export type IssuedTicket = { id: string; category: QueueCategory; number: number };
 
 /**
+ * A ticket whose booking the desk has since cancelled or marked as not come is not in the
+ * queue, whatever its own status says. `cancelTicketForBooking` keeps the two in step from
+ * now on; this also covers numbers left behind before it existed, so the wall's Next and
+ * the room lists show only people who are really waiting, and Call never picks them.
+ */
+const stillBooked = sql`(${queueTickets.bookingId} is null or not exists (
+  select 1 from bookings ab where ab.id = ${queueTickets.bookingId}
+    and ab.status in ('no_show', 'cancelled_by_clinic', 'cancelled_by_patient')))`;
+
+/**
  * Take the next number for a day and category.
  *
  * One statement. Postgres holds the counter row for the duration, so two receptionists
@@ -56,8 +66,10 @@ async function nextNumber(tx: Tx, serviceDate: string, category: QueueCategory):
  * Give a booking its place in the queue, inside the caller's transaction.
  *
  * Re-marking someone arrived after a no-show must not burn a second number, so an
- * existing ticket is returned untouched. The unique index on `booking_id` is what makes
- * that safe rather than merely likely.
+ * existing ticket is reused. If the desk had cancelled it (the booking went to no-show
+ * or was cancelled after arrival), it comes back as waiting with its old number, so the
+ * patient keeps the place they had. The unique index on `booking_id` is what makes one
+ * ticket per booking safe rather than merely likely.
  */
 export async function issueTicketForBooking(
   tx: Tx,
@@ -68,16 +80,29 @@ export async function issueTicketForBooking(
     category: QueueCategory;
     /** The booked doctor, which puts a consultation in that doctor's line. */
     doctorId: string | null;
-    staffId: string;
+    staffId: string | null;
   },
 ): Promise<IssuedTicket> {
   const [existing] = await tx
-    .select({ id: queueTickets.id, category: queueTickets.category, number: queueTickets.number })
+    .select({
+      id: queueTickets.id,
+      category: queueTickets.category,
+      number: queueTickets.number,
+      status: queueTickets.status,
+    })
     .from(queueTickets)
     .where(eq(queueTickets.bookingId, input.bookingId))
     .limit(1);
 
-  if (existing) return existing as IssuedTicket;
+  if (existing) {
+    if (existing.status === 'cancelled') {
+      await tx
+        .update(queueTickets)
+        .set({ status: 'waiting', endedAt: null, calledAt: null, startedAt: null, roomId: null })
+        .where(eq(queueTickets.id, existing.id));
+    }
+    return { id: existing.id, category: existing.category, number: existing.number } as IssuedTicket;
+  }
 
   const number = await nextNumber(tx, input.serviceDate, input.category);
 
@@ -95,6 +120,23 @@ export async function issueTicketForBooking(
     .returning({ id: queueTickets.id, category: queueTickets.category, number: queueTickets.number });
 
   return ticket as IssuedTicket;
+}
+
+/**
+ * Take a booking's number off the board, inside the caller's transaction: the desk
+ * marked them as not come, or cancelled them, after they had arrived. Only a number
+ * still waiting, on the board or skipped is cancelled; one already seen stays as it was.
+ */
+export async function cancelTicketForBooking(tx: Tx, bookingId: string): Promise<void> {
+  await tx
+    .update(queueTickets)
+    .set({ status: 'cancelled', endedAt: new Date() })
+    .where(
+      and(
+        eq(queueTickets.bookingId, bookingId),
+        inArray(queueTickets.status, ['waiting', 'called', 'skipped']),
+      ),
+    );
 }
 
 export type WalkInInput = {
@@ -240,6 +282,7 @@ export async function callNextForRoom(db: Db, station: Station): Promise<CallRes
             eq(queueTickets.serviceDate, station.serviceDate),
             eq(queueTickets.status, 'waiting'),
             lineFilter(category, station.doctorId),
+            stillBooked,
           ),
         )
         // Recalled patients first, in the order they came back; then issue order.
@@ -511,7 +554,7 @@ export async function getQueueTickets(db: Db, serviceDate: string): Promise<Queu
     .leftJoin(patients, eq(patients.id, queueTickets.patientId))
     .leftJoin(doctors, eq(doctors.id, queueTickets.doctorId))
     .leftJoin(rooms, eq(rooms.id, queueTickets.roomId))
-    .where(eq(queueTickets.serviceDate, serviceDate))
+    .where(and(eq(queueTickets.serviceDate, serviceDate), stillBooked))
     .orderBy(asc(queueTickets.number));
 
   return rows as QueueTicketRow[];
@@ -521,7 +564,7 @@ export type StationTicket = {
   id: string;
   category: QueueCategory;
   number: number;
-  status: 'waiting' | 'called' | 'done' | 'skipped';
+  status: 'waiting' | 'called' | 'done' | 'skipped' | 'cancelled';
   /** Full name: this is a staff screen in a room, not the wall. */
   patientName: string | null;
   /** What they booked, if they booked. Walk-ins have none. */
@@ -581,6 +624,7 @@ export async function getLineTickets(
     .where(
       and(
         eq(queueTickets.serviceDate, serviceDate),
+        stillBooked,
         category === 'consultation' && !doctorId
           ? eq(queueTickets.category, category)
           : lineFilter(category, doctorId),

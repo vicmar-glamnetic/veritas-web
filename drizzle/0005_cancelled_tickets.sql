@@ -1,0 +1,1 @@
+ALTER TYPE "public"."queue_status" ADD VALUE 'cancelled';

@@ -4,14 +4,17 @@ import { after, before, describe, it } from 'node:test';
 
 import { and, eq, inArray } from 'drizzle-orm';
 
-import { doctors, patients, queueCounters, queueTickets, rooms } from '@/db/schema';
-import { testDb, warmPool } from '@/test/fixtures';
+import { bookings, doctors, patients, queueCounters, queueTickets, rooms } from '@/db/schema';
+import { makeFixture, testDb, testPatient, warmPool, type Fixture } from '@/test/fixtures';
 
-import { isUniqueViolation } from './booking';
+import { createBooking, isUniqueViolation } from './booking';
+import { manilaToUtc } from './time';
 import {
   callNextForRoom,
+  cancelTicketForBooking,
   finishTicket,
   getQueueTickets,
+  issueTicketForBooking,
   issueWalkInTicket,
   recallSkipped,
   referTicket,
@@ -51,6 +54,7 @@ let consult1: string;
 let consult2: string;
 let reyes: string;
 let santos: string;
+let fixture: Fixture | undefined;
 
 const walkIn = (date: string, category: 'consultation' | 'laboratory' | 'imaging', doctorId?: string | null) =>
   issueWalkInTicket(db, { staffId: null, serviceDate: date, category, doctorId });
@@ -92,6 +96,8 @@ after(async () => {
 
   await db.delete(queueTickets).where(inArray(queueTickets.serviceDate, DATES));
   await db.delete(queueCounters).where(inArray(queueCounters.serviceDate, DATES));
+  // The booking points at its patient, so the fixture's own cleanup goes first.
+  await fixture?.cleanup();
   if (patientIds.length) await db.delete(patients).where(inArray(patients.id, patientIds));
   await db.delete(rooms).where(inArray(rooms.id, [lab1, lab2, xray, consult1, consult2]));
   await db.delete(doctors).where(inArray(doctors.id, [reyes, santos]));
@@ -416,6 +422,63 @@ describe('sending a patient on to another department', () => {
     const toImaging = await send(lab1, 'imaging');
     assert.ok(toImaging.ok, 'consultation → laboratory → imaging');
     await finishTicket(db, lab1);
+  });
+});
+
+describe('a booking cancelled after arrival', () => {
+  it('leaves the lists, and gets its old number back if they arrive after all', async () => {
+    fixture = await makeFixture(db, { date: DATE_E, startTime: '15:00:00', endTime: '15:20:00' });
+    const booking = await createBooking(db, {
+      serviceId: fixture.serviceId,
+      doctorId: fixture.doctorId,
+      sessionId: fixture.sessionId,
+      start: manilaToUtc(DATE_E, '15:00'),
+      patient: testPatient(fixture, 1),
+      consentAt: new Date('2027-07-01T00:00:00Z'),
+      now: new Date('2027-07-01T00:00:00Z'),
+    });
+    const [{ patientId }] = await db
+      .select({ patientId: bookings.patientId })
+      .from(bookings)
+      .where(eq(bookings.id, booking.id));
+
+    const arrive = () =>
+      db.transaction((tx) =>
+        issueTicketForBooking(tx, {
+          bookingId: booking.id,
+          patientId,
+          serviceDate: DATE_E,
+          category: 'consultation',
+          doctorId: fixture!.doctorId,
+          staffId: null,
+        }),
+      );
+    const statusOf = async (id: string) =>
+      (await db.select({ s: queueTickets.status }).from(queueTickets).where(eq(queueTickets.id, id)))[0].s;
+
+    const first = await arrive();
+    assert.equal(await statusOf(first.id), 'waiting');
+
+    await db.transaction((tx) => cancelTicketForBooking(tx, booking.id));
+    assert.equal(await statusOf(first.id), 'cancelled');
+    const board = await getQueueTickets(db, DATE_E);
+    assert.ok(
+      !board.some((t) => t.id === first.id && (t.status === 'waiting' || t.status === 'called')),
+      'not on the board or in Next',
+    );
+
+    // A number left waiting from before the fix: the booking is no-show, the ticket says
+    // waiting. It must still stay off the board.
+    await db.update(queueTickets).set({ status: 'waiting' }).where(eq(queueTickets.id, first.id));
+    await db.update(bookings).set({ status: 'no_show' }).where(eq(bookings.id, booking.id));
+    assert.ok(!(await getQueueTickets(db, DATE_E)).some((t) => t.id === first.id), 'legacy row hidden');
+    await db.update(bookings).set({ status: 'arrived' }).where(eq(bookings.id, booking.id));
+    await db.transaction((tx) => cancelTicketForBooking(tx, booking.id));
+
+    const again = await arrive();
+    assert.equal(again.id, first.id, 'the same ticket');
+    assert.equal(again.number, first.number, 'and the same number');
+    assert.equal(await statusOf(first.id), 'waiting');
   });
 });
 

@@ -83,9 +83,18 @@ export const staffRole = pgEnum('staff_role', [
  * A queue ticket's life. `waiting` is issued but not yet called, `called` is on the
  * board right now (and, once `started_at` is set, in the room with staff), `done` has
  * been seen. `skipped` is someone who did not answer when their number came up; they
- * can be recalled to the front of their line once. The number is never reused.
+ * can be recalled to the front of their line once. `cancelled` is a number whose booking
+ * the desk cancelled or marked as a no-show after arrival: it leaves the board and every
+ * list, and comes back in its old place if the patient is marked arrived again. The
+ * number is never reused.
  */
-export const queueStatus = pgEnum('queue_status', ['waiting', 'called', 'done', 'skipped']);
+export const queueStatus = pgEnum('queue_status', [
+  'waiting',
+  'called',
+  'done',
+  'skipped',
+  'cancelled',
+]);
 
 /** Booking statuses that still consume a seat in a slot. */
 export const OCCUPYING_STATUSES = ['booked', 'arrived', 'no_show'] as const;
