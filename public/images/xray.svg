@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" aria-hidden="true">
+  <rect width="400" height="300" fill="#eef3f8"/>
+  <rect x="70" y="30" width="260" height="230" rx="8" fill="#d8e4f0"/>
+  <rect x="84" y="44" width="232" height="202" rx="4" fill="#122941"/>
+  <rect x="84" y="44" width="232" height="202" rx="4" fill="url(#g)"/>
+  <defs>
+    <radialGradient id="g" cx=".5" cy=".45" r=".6">
+      <stop offset="0" stop-color="#4f80ad" stop-opacity=".55"/>
+      <stop offset="1" stop-color="#122941" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <g fill="none" stroke="#eef3f8" stroke-linecap="round" opacity=".9">
+    <path d="M200 62 V230" stroke-width="8" stroke-dasharray="10 4"/>
+    <path d="M196 74 C160 70 130 80 116 96 M204 74 C240 70 270 80 284 96" stroke-width="5"/>
+    <g stroke-width="4">
+      <path d="M194 96 C160 92 136 104 128 124"/>
+      <path d="M194 116 C158 112 132 126 126 148"/>
+      <path d="M194 136 C158 134 134 148 130 170"/>
+      <path d="M194 156 C162 156 140 168 138 188"/>
+      <path d="M194 176 C168 178 152 188 150 202"/>
+      <path d="M206 96 C240 92 264 104 272 124"/>
+      <path d="M206 116 C242 112 268 126 274 148"/>
+      <path d="M206 136 C242 134 266 148 270 170"/>
+      <path d="M206 156 C238 156 260 168 262 188"/>
+      <path d="M206 176 C232 178 248 188 250 202"/>
+    </g>
+  </g>
+  <path d="M210 150 C226 134 252 140 250 166 C248 186 222 196 210 186Z" fill="#7fa5c9" opacity=".35"/>
+  <rect x="92" y="52" width="40" height="14" rx="2" fill="#fdf3ec"/>
+  <text x="112" y="62.5" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" font-weight="700" fill="#122941">PA</text>
+  <rect x="190" y="18" width="20" height="18" rx="3" fill="#a8551f"/>
+  <rect y="272" width="400" height="28" fill="#d8e4f0"/>
+</svg>

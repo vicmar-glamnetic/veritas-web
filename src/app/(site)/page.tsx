@@ -1,6 +1,7 @@
+import Image from 'next/image';
 import Link from 'next/link';
 
-import { ButtonLink, Container, SectionHeading } from '@/components/ui';
+import { ButtonLink, Container, Monogram, SectionHeading } from '@/components/ui';
 import { telHref } from '@/lib/mobile';
 import { getActiveDoctors, getActivePromos, getSiteSettings } from '@/lib/queries';
 
@@ -9,14 +10,17 @@ export const revalidate = 300;
 const WHAT_WE_DO = [
   {
     title: 'Seeing a doctor',
+    image: '/images/consultation.svg',
     body: 'Family medicine, internal medicine, cardiology and pediatrics. Coughs and fevers, blood pressure and sugar checks, medical certificates, and following up on maintenance medicines.',
   },
   {
     title: 'Blood and urine tests',
+    image: '/images/laboratory.svg',
     body: 'CBC, urinalysis, fasting blood sugar, lipid profile, liver and kidney panels, thyroid, dengue. Most results are ready the same day.',
   },
   {
     title: 'X-ray and scans',
+    image: '/images/xray.svg',
     body: 'Chest X-ray, ultrasound, 12-lead ECG and 2D echo. Our own doctors read them, so you are not waiting on an outside radiologist.',
   },
 ] as const;
@@ -44,14 +48,15 @@ export default async function HomePage() {
   return (
     <>
       {/*
-        Hero. On a wide screen the practical facts sit beside the headline rather than
-        below it: hours, address and phone are what most visitors actually came for, and
-        leaving half the viewport empty to keep them below the fold helps nobody. They
-        stack under the hero on a phone, where the order is still right.
+        Hero: the headline and a picture of the clinic, side by side and centred on each
+        other, so neither column trails off into empty space. The practical facts sit in
+        a strip directly beneath: hours, address and phone are what most visitors came
+        for, so they stay above the fold on a laptop and right after the buttons on a
+        phone.
       */}
       <section className="border-b border-line bg-surface">
         <Container className="py-12 sm:py-16">
-          <div className="lg:grid lg:grid-cols-[1.1fr_0.9fr] lg:items-start lg:gap-16">
+          <div className="lg:grid lg:grid-cols-2 lg:items-center lg:gap-14">
             <div className="max-w-2xl">
               <p className="text-xs font-semibold tracking-[0.18em] text-brand-600 uppercase">
                 Consultations · Laboratory · X-ray · Ultrasound
@@ -82,57 +87,73 @@ export default async function HomePage() {
               </p>
             </div>
 
-            <aside className="mt-12 rounded border border-line bg-paper p-6 lg:mt-0">
-              <h2 className="sr-only">Clinic details</h2>
-              <dl className="divide-y divide-line">
-                <div className="pb-5">
-                  <dt className="text-xs font-semibold tracking-[0.14em] text-ink-400 uppercase">
-                    When we are open
-                  </dt>
-                  <dd className="mt-2 text-sm leading-relaxed whitespace-pre-line text-ink-700">
-                    {settings.openingHoursText || 'Please call to check our hours.'}
-                  </dd>
-                </div>
-                <div className="py-5">
-                  <dt className="text-xs font-semibold tracking-[0.14em] text-ink-400 uppercase">
-                    Where to find us
-                  </dt>
-                  <dd className="mt-2 text-sm leading-relaxed text-ink-700">
-                    {settings.address}
-                    <Link
-                      href="/contact"
-                      className="mt-2 block text-brand-700 underline underline-offset-4"
-                    >
-                      Directions and map
-                    </Link>
-                  </dd>
-                </div>
-                <div className="pt-5">
-                  <dt className="text-xs font-semibold tracking-[0.14em] text-ink-400 uppercase">
-                    Ring the clinic
-                  </dt>
-                  <dd className="mt-2">
-                    {settings.phonePrimary ? (
-                      <a
-                        href={telHref(settings.phonePrimary)}
-                        className="block font-serif text-2xl text-brand-700 underline underline-offset-4"
-                      >
-                        {settings.phonePrimary}
-                      </a>
-                    ) : null}
-                    {settings.phoneSecondary ? (
-                      <a
-                        href={telHref(settings.phoneSecondary)}
-                        className="mt-1 block text-sm text-brand-700 underline underline-offset-4"
-                      >
-                        {settings.phoneSecondary}
-                      </a>
-                    ) : null}
-                  </dd>
-                </div>
-              </dl>
-            </aside>
+            {/*
+              Placeholder illustration, a few KB of SVG. Swap it for a photograph of the
+              real shopfront once the clinic sends one: that is what helps somebody
+              recognise the door from across the street.
+            */}
+            <Image
+              src="/images/clinic-front.svg"
+              alt="Illustration of the clinic's shopfront"
+              width={740}
+              height={510}
+              preload
+              className="mt-10 h-auto w-full rounded border border-line lg:mt-0"
+            />
           </div>
+        </Container>
+      </section>
+
+      <section className="border-b border-line bg-paper">
+        <Container className="py-8">
+          <h2 className="sr-only">Clinic details</h2>
+          <dl className="grid divide-y divide-line sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+            <div className="pb-5 sm:pr-8 sm:pb-0">
+              <dt className="text-xs font-semibold tracking-[0.14em] text-ink-400 uppercase">
+                When we are open
+              </dt>
+              <dd className="mt-2 text-sm leading-relaxed whitespace-pre-line text-ink-700">
+                {settings.openingHoursText || 'Please call to check our hours.'}
+              </dd>
+            </div>
+            <div className="py-5 sm:px-8 sm:py-0">
+              <dt className="text-xs font-semibold tracking-[0.14em] text-ink-400 uppercase">
+                Where to find us
+              </dt>
+              <dd className="mt-2 text-sm leading-relaxed text-ink-700">
+                {settings.address}
+                <Link
+                  href="/contact"
+                  className="mt-2 block text-brand-700 underline underline-offset-4"
+                >
+                  Directions and map
+                </Link>
+              </dd>
+            </div>
+            <div className="pt-5 sm:pt-0 sm:pl-8">
+              <dt className="text-xs font-semibold tracking-[0.14em] text-ink-400 uppercase">
+                Ring the clinic
+              </dt>
+              <dd className="mt-2">
+                {settings.phonePrimary ? (
+                  <a
+                    href={telHref(settings.phonePrimary)}
+                    className="block font-serif text-2xl text-brand-700 underline underline-offset-4"
+                  >
+                    {settings.phonePrimary}
+                  </a>
+                ) : null}
+                {settings.phoneSecondary ? (
+                  <a
+                    href={telHref(settings.phoneSecondary)}
+                    className="mt-1 block text-sm text-brand-700 underline underline-offset-4"
+                  >
+                    {settings.phoneSecondary}
+                  </a>
+                ) : null}
+              </dd>
+            </div>
+          </dl>
         </Container>
       </section>
 
@@ -163,20 +184,21 @@ export default async function HomePage() {
         </section>
       ) : null}
 
-      {/* What we do: a numbered list, not a card grid. */}
+      {/* What we do: a list with a picture per row, not a card grid. */}
       <Container className="py-12">
         <SectionHeading action={{ href: '/services', label: 'All services' }}>
           What we do
         </SectionHeading>
         <ol className="mt-6 space-y-7">
-          {WHAT_WE_DO.map((item, i) => (
-            <li key={item.title} className="flex gap-4 sm:gap-6">
-              <span
-                aria-hidden="true"
-                className="mt-1 w-6 shrink-0 font-serif text-lg text-brand-400"
-              >
-                {String(i + 1).padStart(2, '0')}
-              </span>
+          {WHAT_WE_DO.map((item) => (
+            <li key={item.title} className="flex items-start gap-4 sm:gap-6">
+              <Image
+                src={item.image}
+                alt=""
+                width={400}
+                height={300}
+                className="h-auto w-24 shrink-0 rounded border border-line sm:w-44"
+              />
               <div className="max-w-2xl">
                 <h3 className="font-serif text-lg text-ink-900">{item.title}</h3>
                 <p className="mt-1.5 text-sm leading-relaxed text-ink-500">{item.body}</p>
@@ -216,9 +238,12 @@ export default async function HomePage() {
             {doctors.map((doctor) => (
               <li
                 key={doctor.id}
-                className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 py-3.5"
+                className="flex flex-wrap items-center justify-between gap-x-6 gap-y-1 py-3.5"
               >
-                <p className="font-serif text-lg text-ink-900">{doctor.fullName}</p>
+                <p className="flex items-center gap-3 font-serif text-lg text-ink-900">
+                  <Monogram name={doctor.fullName} className="size-10 text-sm" />
+                  {doctor.fullName}
+                </p>
                 <p className="text-sm text-ink-500">{doctor.specialty}</p>
               </li>
             ))}

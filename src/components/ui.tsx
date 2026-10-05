@@ -138,6 +138,28 @@ export function ButtonLink({
   );
 }
 
+/**
+ * A doctor's initials in a disc, standing in for a portrait until the clinic sends real
+ * photographs. A stock face would read as the actual doctor; initials cannot. Decorative,
+ * because the name is always printed beside it.
+ */
+export function Monogram({ name, className = '' }: { name: string; className?: string }) {
+  const words = name
+    .replace(/^dra?\.?\s+/i, '')
+    .split(/\s+/)
+    .filter(Boolean);
+  const initials = `${words[0]?.[0] ?? ''}${words.length > 1 ? words[words.length - 1][0] : ''}`;
+
+  return (
+    <span
+      aria-hidden="true"
+      className={`inline-flex shrink-0 items-center justify-center rounded-full border border-brand-200 bg-brand-50 font-serif text-brand-700 ${className}`}
+    >
+      {initials.toUpperCase()}
+    </span>
+  );
+}
+
 /** Long-form text: the privacy notice, plain-language explanations. */
 export function Prose({ children }: { children: ReactNode }) {
   return (

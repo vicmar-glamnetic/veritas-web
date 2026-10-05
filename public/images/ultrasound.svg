@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" aria-hidden="true">
+  <rect width="400" height="300" fill="#eef3f8"/>
+  <!-- Screen: the fan-shaped scan, with a baby in it -->
+  <rect x="28" y="30" width="200" height="150" rx="10" fill="#1a4064"/>
+  <rect x="40" y="42" width="176" height="126" rx="4" fill="#122941"/>
+  <path d="M128 50 L190 138 A100 100 0 0 1 66 138 Z" fill="#4f80ad" opacity=".45"/>
+  <path d="M128 50 L190 138 A100 100 0 0 1 66 138 Z" fill="none" stroke="#7fa5c9" stroke-width="2"/>
+  <ellipse cx="128" cy="116" rx="40" ry="26" fill="#122941" opacity=".8"/>
+  <g fill="#d8e4f0">
+    <circle cx="110" cy="110" r="13"/>
+    <path d="M120 105 C138 98 154 106 155 118 C156 130 142 134 130 130 C123 127 120 121 121 115Z"/>
+  </g>
+  <circle cx="106" cy="108" r="2" fill="#122941"/>
+  <rect x="112" y="180" width="32" height="18" fill="#1a4064"/>
+  <rect x="88" y="196" width="80" height="9" rx="4.5" fill="#1a4064"/>
+  <!-- Cable from the probe to the machine -->
+  <path d="M216 150 C250 150 262 120 292 128 C318 135 322 160 312 178" fill="none" stroke="#1a4064" stroke-width="5" stroke-linecap="round"/>
+  <!-- Tummy -->
+  <path d="M170 300 C180 220 250 196 320 200 C370 204 400 230 400 250 V300Z" fill="#f2d5c0"/>
+  <path d="M206 300 C214 246 256 222 300 220" fill="none" stroke="#fdf3ec" stroke-width="6" stroke-linecap="round" opacity=".7"/>
+  <!-- Gel and sound waves under the probe -->
+  <g fill="none" stroke="#4f80ad" stroke-width="3" stroke-linecap="round">
+    <path d="M286 232 Q304 244 322 232"/>
+    <path d="M278 246 Q304 262 330 246"/>
+    <path d="M272 260 Q304 280 336 260"/>
+  </g>
+  <!-- Probe -->
+  <g transform="rotate(-12 304 196)">
+    <rect x="292" y="172" width="24" height="36" rx="8" fill="#fff" stroke="#1a4064" stroke-width="4"/>
+    <path d="M286 206 H322 A6 6 0 0 1 322 218 H286 A6 6 0 0 1 286 206Z" fill="#a8551f"/>
+  </g>
+</svg>

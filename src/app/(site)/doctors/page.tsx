@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 
-import { ButtonLink, Callout, Container, PageHeader } from '@/components/ui';
+import { ButtonLink, Callout, Container, Monogram, PageHeader } from '@/components/ui';
 import { getActiveDoctorSessions, getActiveDoctors } from '@/lib/queries';
 import { formatDays, groupSessionsIntoBlocks } from '@/lib/schedule-display';
 import { formatWallClock } from '@/lib/time';
@@ -42,10 +42,15 @@ export default async function DoctorsPage() {
               return (
                 <li key={doctor.id} className="py-7 sm:grid sm:grid-cols-[1fr_15rem] sm:gap-10">
                   <div className="max-w-2xl">
-                    <h2 className="font-serif text-xl text-ink-900">{doctor.fullName}</h2>
-                    <p className="mt-0.5 text-sm font-medium text-brand-600">
-                      {doctor.specialty}
-                    </p>
+                    <div className="flex items-center gap-4">
+                      <Monogram name={doctor.fullName} className="size-14 text-lg" />
+                      <div>
+                        <h2 className="font-serif text-xl text-ink-900">{doctor.fullName}</h2>
+                        <p className="mt-0.5 text-sm font-medium text-brand-600">
+                          {doctor.specialty}
+                        </p>
+                      </div>
+                    </div>
                     {doctor.bio ? (
                       <p className="mt-3 text-sm leading-relaxed text-ink-500">{doctor.bio}</p>
                     ) : null}
