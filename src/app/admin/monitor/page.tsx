@@ -41,6 +41,10 @@ export default async function MonitorPage({
       room: t.roomName,
     })),
     waitingCount: panel.waiting.length,
+    next: panel.waiting.slice(0, 4).map((ticket) => ({
+      ticket: formatTicket(ticket.category, ticket.number),
+      name: ticket.patientName ? shortenName(ticket.patientName) : null,
+    })),
   }));
 
   return (
