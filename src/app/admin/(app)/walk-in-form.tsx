@@ -94,7 +94,7 @@ export function WalkInForm({ doctors }: { doctors: { id: string; fullName: strin
               ))}
             </Select>
           </Field>
-          <Field label="Doctor" hint="Consultations only.">
+          <Field label="Doctor, for consultations">
             <Select name="doctorId" defaultValue={values?.doctorId ?? ''}>
               <option value="">First available</option>
               {doctors.map((d) => (
