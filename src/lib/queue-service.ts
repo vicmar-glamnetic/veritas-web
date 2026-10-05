@@ -139,6 +139,38 @@ export async function cancelTicketForBooking(tx: Tx, bookingId: string): Promise
     );
 }
 
+/**
+ * Clear today's queue from the waiting room screen.
+ *
+ * With a category: everyone still waiting (or skipped) in it — the people in a room stay
+ * on the board until that room finishes them. Without one: everything, waiting, skipped
+ * and on the board, in every category, so the wall starts empty.
+ *
+ * Tickets are cancelled, not deleted, and the counter is left alone: a number already
+ * shown to the room is never handed to someone else, so the next one issued continues
+ * the day's sequence. A cleared booking's number comes back if the desk marks the
+ * patient arrived again.
+ */
+export async function clearQueue(
+  db: Db,
+  serviceDate: string,
+  category: QueueCategory | null,
+): Promise<number> {
+  const rows = await db
+    .update(queueTickets)
+    .set({ status: 'cancelled', endedAt: new Date() })
+    .where(
+      and(
+        eq(queueTickets.serviceDate, serviceDate),
+        category
+          ? and(eq(queueTickets.category, category), inArray(queueTickets.status, ['waiting', 'skipped']))
+          : inArray(queueTickets.status, ['waiting', 'skipped', 'called']),
+      ),
+    )
+    .returning({ id: queueTickets.id });
+  return rows.length;
+}
+
 export type WalkInInput = {
   staffId: string | null;
   serviceDate: string;

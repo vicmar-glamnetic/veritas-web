@@ -3,8 +3,12 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { useFormStatus } from 'react-dom';
 
+import { ConfirmSubmit } from '@/components/confirm-dialog';
 import { formatManilaTime } from '@/lib/time';
+
+import { clearAll, clearWaiting } from './actions';
 
 /**
  * The waiting-room board.
@@ -114,6 +118,8 @@ export function MonitorBoard({
   panels,
   announcement,
   showControls,
+  canClear,
+  notice,
 }: {
   clinicName: string;
   dateLabel: string;
@@ -122,6 +128,10 @@ export function MonitorBoard({
   announcement: Announcement | null;
   /** False on the wall screen (`?display=1`), which hides the screen settings too. */
   showControls: boolean;
+  /** Desk staff may clear the queue from here. */
+  canClear: boolean;
+  /** What the last clear did, from the redirect. */
+  notice: string | null;
 }) {
   const router = useRouter();
   const [clock, setClock] = useState(initialTime);
@@ -399,6 +409,53 @@ export function MonitorBoard({
             </div>
           </div>
 
+          {canClear ? (
+            <div className="mt-3 border-t border-brand-700 pt-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="mr-2 text-xs font-semibold tracking-[0.14em] text-brand-300 uppercase">
+                  Clear the queue
+                </h3>
+                {panels.map((panel) => (
+                  <form key={panel.key} id={`clear-${panel.key}`} action={clearWaiting}>
+                    <input type="hidden" name="category" value={panel.key} />
+                    <ClearButton
+                      formId={`clear-${panel.key}`}
+                      label={`Clear ${panel.label} waiting (${panel.waitingCount})`}
+                      title={`Clear the ${panel.label.toLowerCase()} waiting list?`}
+                      confirmLabel="Yes, clear it"
+                    >
+                      <p className="text-sm leading-relaxed text-ink-700">
+                        {panel.waitingCount === 1 ? '1 waiting number' : `${panel.waitingCount} waiting numbers`}{' '}
+                        in {panel.label.toLowerCase()} come off the queue. Anyone already in a room
+                        stays on the board. Numbers are not reused; the next one continues the day.
+                      </p>
+                    </ClearButton>
+                  </form>
+                ))}
+                <form id="clear-all" action={clearAll}>
+                  <ClearButton
+                    formId="clear-all"
+                    label="Clear all"
+                    title="Clear the whole board?"
+                    confirmLabel="Yes, clear everything"
+                    strong
+                  >
+                    <p className="text-sm leading-relaxed text-ink-700">
+                      Every number for today comes off: waiting, skipped and on the screen, in
+                      all three departments. Rooms will show as free. Use it at closing or to
+                      start a demo over; numbers are not reused.
+                    </p>
+                  </ClearButton>
+                </form>
+              </div>
+              {notice ? (
+                <p role="status" className="mt-2 text-xs font-medium text-brand-100">
+                  {notice}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+
           <p className="mt-3 text-xs text-brand-300">
             Numbers are handed out at reception when a patient is marked Arrived or a
             walk-in is added on Today, and called from each room’s{' '}
@@ -417,6 +474,47 @@ export function MonitorBoard({
        */}
       <noscript dangerouslySetInnerHTML={{ __html: '<meta http-equiv="refresh" content="30">' }} />
     </div>
+  );
+}
+
+/**
+ * A clear control: a real submit, behind a confirmation dialog once JavaScript is up.
+ * A component because useFormStatus only reports from inside its form.
+ */
+function ClearButton({
+  formId,
+  label,
+  title,
+  confirmLabel,
+  strong,
+  children,
+}: {
+  formId: string;
+  label: string;
+  title: string;
+  confirmLabel: string;
+  strong?: boolean;
+  children: React.ReactNode;
+}) {
+  const { pending } = useFormStatus();
+  return (
+    <ConfirmSubmit
+      formId={formId}
+      pending={pending}
+      tone="danger"
+      label={label}
+      pendingLabel="Clearing…"
+      title={title}
+      confirmLabel={confirmLabel}
+      cancelLabel="Keep it"
+      buttonClassName={`min-h-9 rounded border px-3 py-1.5 text-xs font-medium disabled:opacity-60 ${
+        strong
+          ? 'border-red-300 bg-red-700 text-white hover:bg-red-800'
+          : 'border-brand-400 text-brand-100 hover:bg-brand-800'
+      }`}
+    >
+      {children}
+    </ConfirmSubmit>
   );
 }
 

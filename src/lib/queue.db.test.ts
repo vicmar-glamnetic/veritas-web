@@ -12,6 +12,7 @@ import { manilaToUtc } from './time';
 import {
   callNextForRoom,
   cancelTicketForBooking,
+  clearQueue,
   finishTicket,
   getQueueTickets,
   issueTicketForBooking,
@@ -479,6 +480,30 @@ describe('a booking cancelled after arrival', () => {
     assert.equal(again.id, first.id, 'the same ticket');
     assert.equal(again.number, first.number, 'and the same number');
     assert.equal(await statusOf(first.id), 'waiting');
+  });
+});
+
+describe('clearing the queue from the monitor', () => {
+  it('clears one category’s waiting list but leaves whoever is in a room', async () => {
+    // DATE_C: ten consultation walk-ins waiting from above. Put one in a room first.
+    assert.ok((await call(DATE_C, consult2, santos)).ok);
+    const cleared = await clearQueue(db, DATE_C, 'consultation');
+    assert.equal(cleared, 9);
+
+    const board = await getQueueTickets(db, DATE_C);
+    const consult = board.filter((t) => t.category === 'consultation');
+    assert.equal(consult.filter((t) => t.status === 'waiting').length, 0);
+    assert.equal(consult.filter((t) => t.status === 'called').length, 1, 'the room keeps its patient');
+    assert.ok(board.some((t) => t.category === 'laboratory' && t.status === 'waiting'), 'other lines untouched');
+  });
+
+  it('clear all empties the board, and the next number continues the day', async () => {
+    await clearQueue(db, DATE_C, null);
+    const board = await getQueueTickets(db, DATE_C);
+    assert.equal(board.filter((t) => t.status === 'waiting' || t.status === 'called').length, 0);
+
+    const next = await walkIn(DATE_C, 'consultation');
+    assert.equal(next.number, 11, 'a number shown to the room is never reused');
   });
 });
 

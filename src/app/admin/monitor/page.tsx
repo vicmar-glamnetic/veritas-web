@@ -1,4 +1,6 @@
 import { db } from '@/db';
+import { isDeskRole } from '@/lib/admin/roles';
+import { requireStaff } from '@/lib/auth';
 import { getQueueTickets } from '@/lib/queue-service';
 import { todayInManila } from '@/lib/admin/queries';
 import { buildQueueBoard, formatTicket, shortenName } from '@/lib/queue';
@@ -23,9 +25,13 @@ export const dynamic = 'force-dynamic';
 export default async function MonitorPage({
   searchParams,
 }: {
-  searchParams: Promise<{ display?: string }>;
+  searchParams: Promise<{ display?: string; notice?: string }>;
 }) {
-  const [{ display }, date] = await Promise.all([searchParams, todayInManila()]);
+  const [{ display, notice }, date, staff] = await Promise.all([
+    searchParams,
+    todayInManila(),
+    requireStaff(),
+  ]);
   const [settings, tickets] = await Promise.all([getSiteSettings(), getQueueTickets(db, date)]);
   const board = buildQueueBoard(tickets);
   const now = new Date();
@@ -54,6 +60,9 @@ export default async function MonitorPage({
       initialTime={formatManilaTime(now)}
       panels={panels}
       showControls={display !== '1'}
+      // Clearing is for the desk; room logins see the board but not these.
+      canClear={isDeskRole(staff.role)}
+      notice={display !== '1' ? (notice ?? null) : null}
       announcement={
         board.lastCalled
           ? {

@@ -23,9 +23,12 @@ export function ConfirmSubmit({
   confirmLabel,
   cancelLabel = 'Go back',
   tone = 'primary',
+  buttonClassName,
   children,
 }: {
   tone?: 'primary' | 'danger';
+  /** Replaces the visible button's classes, for a compact control on a dense screen. */
+  buttonClassName?: string;
   formId: string;
   label: string;
   pendingLabel: string;
@@ -62,7 +65,10 @@ export function ConfirmSubmit({
           event.preventDefault();
           dialog.showModal();
         }}
-        className={`inline-flex min-h-[3.25rem] w-full items-center justify-center rounded px-5 py-3 text-base font-semibold text-white disabled:opacity-60 ${tones[tone]}`}
+        className={
+          buttonClassName ??
+          `inline-flex min-h-[3.25rem] w-full items-center justify-center rounded px-5 py-3 text-base font-semibold text-white disabled:opacity-60 ${tones[tone]}`
+        }
       >
         {pending ? pendingLabel : label}
       </button>

@@ -331,7 +331,13 @@ with a booking reference that carries no order.
 - **Skipped patients go to the front, once** (the client's answer). `recalled_at` is both
   the ordering (`recalled_at nulls last, number`; `compareInLine` is the pure twin) and
   the once-only guard, enforced in the UPDATE's WHERE clause.
-- **`/admin/monitor` has screen settings only; `/admin/monitor?display=1` has nothing.**
+- **Clear the queue lives on `/admin/monitor`, desk only.** Clear <category> waiting
+  cancels that category's waiting and skipped numbers and leaves whoever is in a room;
+  Clear all cancels every number for today, on the board too. Both sit behind
+  `ConfirmSubmit`, cancel rather than delete, and never touch `queue_counters`, so the
+  next number continues the day. `requireDesk()` in the actions, and the buttons are
+  hidden from room logins.
+- **`/admin/monitor` has screen settings and the clear controls; `/admin/monitor?display=1` has nothing.**
   Both are behind `requireStaff()`, repeated in the route's own layout because the
   `(app)` guard does not reach it.
 - **A public wall gets the minimum.** `shortenName` cuts the name to "Corazon A."; a
