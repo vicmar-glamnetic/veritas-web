@@ -58,12 +58,27 @@ export const bookingStatus = pgEnum('booking_status', [
 /** Who caused a booking_events row. `staff` is qualified by actor_staff_user_id. */
 export const bookingActor = pgEnum('booking_actor', ['patient', 'staff', 'system']);
 
-export const staffRole = pgEnum('staff_role', ['admin', 'reception']);
+/**
+ * What a staff account may do.
+ *
+ * `admin` and `reception` run the desk: bookings, schedules, prices, the Today list.
+ * `doctor`, `laboratory` and `imaging` work a room: they call, start and finish patients
+ * on the station screen and see nothing of the booking admin. A `doctor` account is tied
+ * to one row in `doctors`, which is what decides whose line it calls from.
+ */
+export const staffRole = pgEnum('staff_role', [
+  'admin',
+  'reception',
+  'doctor',
+  'laboratory',
+  'imaging',
+]);
 
 /**
  * A queue ticket's life. `waiting` is issued but not yet called, `called` is on the
- * board right now, `done` has been seen. `skipped` is someone who did not answer when
- * their number came up; the number is never reused either way.
+ * board right now (and, once `started_at` is set, in the room with staff), `done` has
+ * been seen. `skipped` is someone who did not answer when their number came up; they
+ * can be recalled to the front of their line once. The number is never reused.
  */
 export const queueStatus = pgEnum('queue_status', ['waiting', 'called', 'done', 'skipped']);
 
@@ -385,6 +400,37 @@ export const promos = pgTable(
 );
 
 /* -------------------------------------------------------------------------- */
+/* Rooms                                                                      */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * A place a patient is sent to: "Consultation Room 2", "Phlebotomy", "X-ray Room".
+ *
+ * Each room serves one category. Who is in it is not stored here: staff choose their room
+ * when they open the station screen, and that choice lives on their sign-in session, so
+ * a doctor who moves rooms between mornings needs no admin edit. The board names the
+ * room a number was called to, which is what "please proceed to" needs.
+ *
+ * Tickets point at the room that called them with `on delete restrict`; a room that has
+ * ever been used is deactivated, not deleted.
+ */
+export const rooms = pgTable(
+  'rooms',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    name: text('name').notNull(),
+    category: serviceCategory('category').notNull(),
+    sortOrder: integer('sort_order').notNull().default(0),
+    isActive: boolean('is_active').notNull().default(true),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex('rooms_name_key').on(t.name),
+    index('rooms_active_idx').on(t.isActive, t.category, t.sortOrder),
+  ],
+);
+
+/* -------------------------------------------------------------------------- */
 /* Staff                                                                      */
 /* -------------------------------------------------------------------------- */
 
@@ -398,11 +444,23 @@ export const staffUsers = pgTable(
     /** scrypt, from node:crypto. No third-party auth provider. */
     passwordHash: text('password_hash').notNull(),
     role: staffRole('role').notNull().default('reception'),
+    /** Set for `doctor` accounts only: whose consultation line this login calls from. */
+    doctorId: uuid('doctor_id').references(() => doctors.id, { onDelete: 'restrict' }),
     isActive: boolean('is_active').notNull().default(true),
     lastLoginAt: timestamp('last_login_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [uniqueIndex('staff_users_email_key').on(t.email)],
+  (t) => [
+    uniqueIndex('staff_users_email_key').on(t.email),
+    // One login per doctor, so "Dra. Reyes' line" always means one person's screen.
+    uniqueIndex('staff_users_doctor_key').on(t.doctorId),
+    check(
+      'staff_users_doctor_role',
+      // Compared as text: Postgres refuses to use an enum value in the same transaction
+      // that added it, and this constraint ships in the migration that adds 'doctor'.
+      sql`(${t.role}::text = 'doctor') = (${t.doctorId} is not null)`,
+    ),
+  ],
 );
 
 /**
@@ -420,6 +478,19 @@ export const staffSessions = pgTable(
     tokenHash: text('token_hash').notNull(),
     expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
     revokedAt: timestamp('revoked_at', { withTimezone: true }),
+    /**
+     * The room this person is working in, chosen on the station screen. Kept on the
+     * session rather than the account because it is a fact about today: the next sign-in
+     * asks again, and nobody has to remember to clear it.
+     */
+    roomId: uuid('room_id').references(() => rooms.id, { onDelete: 'set null' }),
+    /**
+     * For a consultation room: whose line is being called. A doctor's own account always
+     * calls their own; a nurse or receptionist running a room for a doctor picks one.
+     */
+    stationDoctorId: uuid('station_doctor_id').references(() => doctors.id, {
+      onDelete: 'set null',
+    }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
@@ -517,10 +588,25 @@ export const queueTickets = pgTable(
     number: integer('number').notNull(),
     bookingId: uuid('booking_id').references(() => bookings.id, { onDelete: 'restrict' }),
     patientId: uuid('patient_id').references(() => patients.id, { onDelete: 'restrict' }),
+    /**
+     * Whose line a consultation ticket is in. Each doctor calls their own patients. Null
+     * for a walk-in who will see the first available doctor — any doctor's line takes
+     * them — and always null for laboratory and imaging, which have one line each.
+     */
+    doctorId: uuid('doctor_id').references(() => doctors.id, { onDelete: 'restrict' }),
+    /** The room that called this number, which is what the board tells the patient. */
+    roomId: uuid('room_id').references(() => rooms.id, { onDelete: 'restrict' }),
     status: queueStatus('status').notNull().default('waiting'),
     issuedAt: timestamp('issued_at', { withTimezone: true }).notNull().defaultNow(),
     calledAt: timestamp('called_at', { withTimezone: true }),
+    /** The patient walked in and staff pressed Start. Waiting time ends here. */
+    startedAt: timestamp('started_at', { withTimezone: true }),
     endedAt: timestamp('ended_at', { withTimezone: true }),
+    /**
+     * Set when a skipped patient came back and was put at the front of their line. Also
+     * the once-only guard: a ticket with this set cannot be recalled again.
+     */
+    recalledAt: timestamp('recalled_at', { withTimezone: true }),
     issuedByStaffUserId: uuid('issued_by_staff_user_id').references(() => staffUsers.id, {
       onDelete: 'restrict',
     }),
@@ -535,7 +621,18 @@ export const queueTickets = pgTable(
     // One ticket per booking. Nulls are distinct in Postgres, so walk-ins are unaffected.
     uniqueIndex('queue_tickets_booking_key').on(t.bookingId),
     index('queue_tickets_board_idx').on(t.serviceDate, t.category, t.status),
+    index('queue_tickets_line_idx').on(t.serviceDate, t.category, t.doctorId, t.status),
+    // One patient per room at a time. Two people pressing Call next in the same room at
+    // the same moment: the second insert into "called" fails here rather than putting
+    // two numbers on the board for one door.
+    uniqueIndex('queue_tickets_room_called_key')
+      .on(t.roomId)
+      .where(sql`${t.status} = 'called' and ${t.roomId} is not null`),
     check('queue_tickets_number_positive', sql`${t.number} > 0`),
+    check(
+      'queue_tickets_doctor_only_for_consultation',
+      sql`${t.category} = 'consultation' or ${t.doctorId} is null`,
+    ),
   ],
 );
 

@@ -1,7 +1,14 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { doctorSchema, promoSchema, serviceSchema, staffSchema } from './schemas';
+import {
+  doctorSchema,
+  promoSchema,
+  roomSchema,
+  serviceSchema,
+  staffSchema,
+  walkInSchema,
+} from './schemas';
 
 /**
  * An unticked checkbox sends no key at all. Every one of these schemas broke on that,
@@ -84,5 +91,54 @@ describe('admin form schemas: unticked checkboxes', () => {
       false,
       'a non-numeric price must not pass',
     );
+  });
+});
+
+const DOCTOR_ID = '6f1d2c4e-8a3b-4c5d-9e7f-0a1b2c3d4e5f';
+
+describe('staff roles and the doctor link', () => {
+  const base = { name: 'Dra. Reyes', email: 'reyes@example.com', password: 'long-enough-1', isActive: 'on' };
+
+  it('refuses a doctor account with no doctor to call for', () => {
+    const r = staffSchema.safeParse({ ...base, role: 'doctor', doctorId: '' });
+    assert.equal(r.success, false);
+  });
+
+  it('keeps the link on a doctor account', () => {
+    const r = staffSchema.safeParse({ ...base, role: 'doctor', doctorId: DOCTOR_ID });
+    assert.ok(r.success);
+    assert.equal(r.data.doctorId, DOCTOR_ID);
+  });
+
+  it('drops a leftover link when the role is not doctor', () => {
+    // The select still shows the old doctor after someone changes the role.
+    const r = staffSchema.safeParse({ ...base, role: 'laboratory', doctorId: DOCTOR_ID });
+    assert.ok(r.success);
+    assert.equal(r.data.doctorId, null);
+  });
+});
+
+describe('rooms and walk-ins', () => {
+  it('accepts a room with Active unticked', () => {
+    const r = roomSchema.safeParse({ name: 'X-ray Room', category: 'imaging', sortOrder: '1' });
+    assert.ok(r.success);
+    assert.equal(r.data.isActive, false);
+  });
+
+  it('reads a blank walk-in doctor as first available, and normalises the mobile', () => {
+    const r = walkInSchema.safeParse({
+      fullName: 'Ana Reyes',
+      mobile: '0917 123 4567',
+      category: 'consultation',
+      doctorId: '',
+    });
+    assert.ok(r.success, r.success ? '' : r.error.issues.map((i) => i.message).join('; '));
+    assert.equal(r.data.doctorId, null);
+    assert.equal(r.data.mobile, '+639171234567');
+  });
+
+  it('refuses a walk-in without a usable mobile', () => {
+    const r = walkInSchema.safeParse({ fullName: 'Ana Reyes', mobile: '12', category: 'laboratory', doctorId: '' });
+    assert.equal(r.success, false);
   });
 });

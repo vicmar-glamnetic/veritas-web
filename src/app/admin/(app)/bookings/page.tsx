@@ -5,7 +5,7 @@ import { and, asc, eq } from 'drizzle-orm';
 import { db } from '@/db';
 import { doctors, services } from '@/db/schema';
 import { findBookings } from '@/lib/admin/queries';
-import { requireStaff } from '@/lib/auth';
+import { requireDesk } from '@/lib/auth';
 import { formatManilaDate } from '@/lib/time';
 
 import { BookingRow } from '../booking-row';
@@ -23,7 +23,7 @@ export default async function BookingsPage({
 }: {
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
-  await requireStaff();
+  await requireDesk();
   const p = await searchParams;
 
   const [doctorList, serviceList, results] = await Promise.all([

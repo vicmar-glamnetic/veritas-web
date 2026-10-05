@@ -5,7 +5,7 @@ import { asc, eq, gte } from 'drizzle-orm';
 import { db } from '@/db';
 import { doctors, sessionBlackouts, sessions } from '@/db/schema';
 import { getBookingsAffectedByBlackout } from '@/lib/admin/queries';
-import { requireStaff } from '@/lib/auth';
+import { requireDesk } from '@/lib/auth';
 import { formatMobile } from '@/lib/mobile';
 import { DAY_NAMES, formatManilaTime, formatWallClock, manilaDateString } from '@/lib/time';
 import { slotStartTimes, distributeOnlineCapacity } from '@/lib/availability';
@@ -23,7 +23,7 @@ export default async function SchedulesPage({
 }: {
   searchParams: Promise<{ done?: string; error?: string; edit?: string; new?: string }>;
 }) {
-  await requireStaff();
+  await requireDesk();
   const { done, error, edit, new: isNewParam } = await searchParams;
   const isNew = isNewParam === '1';
   const today = manilaDateString();

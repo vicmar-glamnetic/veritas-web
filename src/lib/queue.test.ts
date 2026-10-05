@@ -3,8 +3,10 @@ import { test } from 'node:test';
 
 import {
   buildQueueBoard,
+  canRecall,
+  compareInLine,
   formatTicket,
-  nextAutoCategory,
+  isInLine,
   shortenName,
   type QueueTicketRow,
 } from './queue';
@@ -15,8 +17,11 @@ function ticket(over: Partial<QueueTicketRow> & { id: string }): QueueTicketRow 
     number: 1,
     status: 'waiting',
     patientName: 'Juan Dela Cruz',
+    doctorId: null,
     doctorName: null,
+    roomName: null,
     calledAt: null,
+    recalledAt: null,
     ...over,
   };
 }
@@ -40,7 +45,7 @@ test('now serving is the called ticket, not the newest arrival', () => {
     ticket({ id: 'c', number: 3, status: 'waiting' }),
   ]);
 
-  assert.equal(board.panels[0].serving?.id, 'b');
+  assert.deepEqual(board.panels[0].serving.map((t) => t.id), ['b']);
   assert.deepEqual(
     board.panels[0].waiting.map((t) => t.id),
     ['c'],
@@ -60,13 +65,14 @@ test('waiting is in issue order, so the queue cannot jump', () => {
   );
 });
 
-test('the board never goes backwards if two were left called at once', () => {
+test('two rooms in one category both show, in room order', () => {
   const board = buildQueueBoard([
-    ticket({ id: 'older', number: 7, status: 'called' }),
-    ticket({ id: 'newer', number: 8, status: 'called' }),
+    ticket({ id: 'r10', number: 7, status: 'called', roomName: 'Consultation Room 10' }),
+    ticket({ id: 'r2', number: 8, status: 'called', roomName: 'Consultation Room 2' }),
   ]);
 
-  assert.equal(board.panels[0].serving?.id, 'newer');
+  // Numeric-aware, so Room 2 sits before Room 10 and neither jumps about on refresh.
+  assert.deepEqual(board.panels[0].serving.map((t) => t.id), ['r2', 'r10']);
 });
 
 test('each category keeps its own queue', () => {
@@ -76,11 +82,11 @@ test('each category keeps its own queue', () => {
   ]);
 
   assert.deepEqual(
-    board.panels.map((p) => [p.key, p.serving?.id ?? null]),
+    board.panels.map((p) => [p.key, p.serving.map((t) => t.id)]),
     [
-      ['consultation', 'c'],
-      ['laboratory', 'l'],
-      ['imaging', null],
+      ['consultation', ['c']],
+      ['laboratory', ['l']],
+      ['imaging', []],
     ],
   );
 });
@@ -142,7 +148,7 @@ test('done and skipped tickets leave the board entirely', () => {
     ticket({ id: 'skipped', number: 2, status: 'skipped' }),
   ]);
 
-  assert.equal(board.panels[0].serving, null);
+  assert.equal(board.panels[0].serving.length, 0);
   assert.equal(board.panels[0].waiting.length, 0);
 });
 
@@ -151,8 +157,8 @@ test('a walk-in with no name still holds its place', () => {
     ticket({ id: 'walkin', number: 5, status: 'called', patientName: null }),
   ]);
 
-  assert.equal(board.panels[0].serving?.id, 'walkin');
-  assert.equal(board.panels[0].serving?.patientName, null);
+  assert.equal(board.panels[0].serving[0]?.id, 'walkin');
+  assert.equal(board.panels[0].serving[0]?.patientName, null);
 });
 
 test('shortenName keeps a first name and a surname initial', () => {
@@ -170,35 +176,58 @@ test('shortenName never returns a full surname', () => {
   assert.ok(!shortenName('Juan Dela Cruz').includes('Cruz'));
 });
 
-/* Auto mode's rotation. Pure, so it can be pinned without a timer or a browser. */
+/* Lines: who is in whose queue, and in what order. */
 
-const panels = (c: number, l: number, i: number) => [
-  { key: 'consultation' as const, waitingCount: c },
-  { key: 'laboratory' as const, waitingCount: l },
-  { key: 'imaging' as const, waitingCount: i },
-];
+test('a booked consultation is only in its own doctor’s line', () => {
+  const booked = { category: 'consultation' as const, doctorId: 'reyes' };
 
-test('Auto rotates through the categories rather than repeating one', () => {
-  assert.equal(nextAutoCategory(panels(1, 1, 1), null), 'consultation');
-  assert.equal(nextAutoCategory(panels(1, 1, 1), 'consultation'), 'laboratory');
-  assert.equal(nextAutoCategory(panels(1, 1, 1), 'laboratory'), 'imaging');
-  assert.equal(nextAutoCategory(panels(1, 1, 1), 'imaging'), 'consultation');
+  assert.equal(isInLine(booked, { category: 'consultation', doctorId: 'reyes' }), true);
+  assert.equal(isInLine(booked, { category: 'consultation', doctorId: 'santos' }), false);
 });
 
-test('Auto skips a category with nobody waiting', () => {
-  assert.equal(nextAutoCategory(panels(1, 0, 1), 'consultation'), 'imaging');
-  assert.equal(nextAutoCategory(panels(0, 0, 3), 'laboratory'), 'imaging');
+test('a first-available walk-in is in every doctor’s line', () => {
+  const walkIn = { category: 'consultation' as const, doctorId: null };
+
+  assert.equal(isInLine(walkIn, { category: 'consultation', doctorId: 'reyes' }), true);
+  assert.equal(isInLine(walkIn, { category: 'consultation', doctorId: 'santos' }), true);
 });
 
-test('a busy consultation list cannot starve the other two', () => {
-  assert.equal(nextAutoCategory(panels(9, 1, 1), 'consultation'), 'laboratory');
+test('laboratory and imaging are one line each, whatever the room', () => {
+  assert.equal(isInLine({ category: 'laboratory', doctorId: null }, { category: 'laboratory', doctorId: null }), true);
+  assert.equal(isInLine({ category: 'laboratory', doctorId: null }, { category: 'imaging', doctorId: null }), false);
 });
 
-test('Auto has nothing to do when the clinic is empty', () => {
-  assert.equal(nextAutoCategory(panels(0, 0, 0), null), null);
-  assert.equal(nextAutoCategory(panels(0, 0, 0), 'imaging'), null);
+test('a recalled patient goes to the front of the line', () => {
+  const line = [
+    ticket({ id: 'n4', number: 4 }),
+    ticket({ id: 'n2', number: 2, recalledAt: at('2027-01-05T03:00:00Z') }),
+    ticket({ id: 'n5', number: 5 }),
+  ].sort(compareInLine);
+
+  assert.deepEqual(line.map((t) => t.id), ['n2', 'n4', 'n5']);
 });
 
-test('Auto stays on the only category that has anyone', () => {
-  assert.equal(nextAutoCategory(panels(0, 2, 0), 'laboratory'), 'laboratory');
+test('two recalled patients go in the order they came back, not by number', () => {
+  const line = [
+    ticket({ id: 'later', number: 1, recalledAt: at('2027-01-05T04:00:00Z') }),
+    ticket({ id: 'sooner', number: 3, recalledAt: at('2027-01-05T03:00:00Z') }),
+    ticket({ id: 'plain', number: 2 }),
+  ].sort(compareInLine);
+
+  assert.deepEqual(line.map((t) => t.id), ['sooner', 'later', 'plain']);
+});
+
+test('the board lists the waiting in calling order, recalled first', () => {
+  const board = buildQueueBoard([
+    ticket({ id: 'n6', number: 6 }),
+    ticket({ id: 'n3', number: 3, recalledAt: at('2027-01-05T03:00:00Z') }),
+  ]);
+
+  assert.deepEqual(board.panels[0].waiting.map((t) => t.id), ['n3', 'n6']);
+});
+
+test('a skipped patient can be recalled once, and only once', () => {
+  assert.equal(canRecall({ status: 'skipped', recalledAt: null }), true);
+  assert.equal(canRecall({ status: 'skipped', recalledAt: at('2027-01-05T03:00:00Z') }), false);
+  assert.equal(canRecall({ status: 'waiting', recalledAt: null }), false);
 });

@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { phMobileSchema } from '@/lib/validation';
+
 /** Every admin server action validates with one of these. The client is never trusted. */
 
 const trimmed = (min: number, max: number, message: string) =>
@@ -132,19 +134,60 @@ export const settingsSchema = z.object({
   bookingHorizonDays: intFrom(1, 180, 'The horizon must be between 1 and 180 days'),
 });
 
-export const staffSchema = z.object({
+/** A select whose blank option means "none". */
+const optionalId = z
+  .string()
+  .trim()
+  .transform((v) => (v === '' ? null : v))
+  .pipe(z.uuid().nullable())
+  .nullish()
+  .transform((v) => v ?? null);
+
+export const staffSchema = z
+  .object({
+    id: z.uuid().optional(),
+    name: trimmed(2, 120, 'Enter a name.'),
+    email: z.string().trim().toLowerCase().min(1, 'Enter an email address.').max(200).pipe(z.email('That email address does not look right.')),
+    role: z.enum(['admin', 'reception', 'doctor', 'laboratory', 'imaging']),
+    /** Only a doctor account carries one; the database enforces it too. */
+    doctorId: optionalId,
+    isActive: checkbox,
+    // Blank on edit means "leave the password alone".
+    password: z
+      .string()
+      .max(200)
+      .transform((v) => (v === '' ? null : v))
+      .nullable()
+      .refine((v) => v === null || v.length >= 10, {
+        message: 'A password needs at least 10 characters.',
+      }),
+  })
+  .refine((u) => u.role !== 'doctor' || u.doctorId !== null, {
+    message: 'A doctor account needs to be linked to a doctor, so it knows whose patients to call.',
+    path: ['doctorId'],
+  })
+  // Any other role drops the link rather than failing: the select still shows its old
+  // value when someone changes a doctor's account to reception.
+  .transform((u) => (u.role === 'doctor' ? u : { ...u, doctorId: null }));
+
+export const roomSchema = z.object({
   id: z.uuid().optional(),
-  name: trimmed(2, 120, 'Enter a name.'),
-  email: z.string().trim().toLowerCase().min(1, 'Enter an email address.').max(200).pipe(z.email('That email address does not look right.')),
-  role: z.enum(['admin', 'reception']),
+  name: trimmed(2, 80, 'Give the room a name, as the patients will see it on the screen.'),
+  category: z.enum(['consultation', 'laboratory', 'imaging']),
+  sortOrder: intFrom(0, 999, 'Order must be between 0 and 999'),
   isActive: checkbox,
-  // Blank on edit means "leave the password alone".
-  password: z
-    .string()
-    .max(200)
-    .transform((v) => (v === '' ? null : v))
-    .nullable()
-    .refine((v) => v === null || v.length >= 10, {
-      message: 'A password needs at least 10 characters.',
-    }),
+});
+
+/** Which room a station screen is working, and for a consultation room, whose line. */
+export const stationSchema = z.object({
+  roomId: z.uuid('Pick a room.'),
+  doctorId: optionalId,
+});
+
+export const walkInSchema = z.object({
+  fullName: trimmed(2, 120, 'Enter the patient’s name.'),
+  mobile: phMobileSchema,
+  category: z.enum(['consultation', 'laboratory', 'imaging']),
+  /** Blank means the first doctor who is free. Ignored outside consultation. */
+  doctorId: optionalId,
 });

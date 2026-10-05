@@ -1,13 +1,18 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 
+import { asc, eq } from 'drizzle-orm';
+
+import { db } from '@/db';
+import { doctors } from '@/db/schema';
 import { getBookingsForDate, getDayCounts, todayInManila } from '@/lib/admin/queries';
-import { requireStaff } from '@/lib/auth';
+import { requireDesk } from '@/lib/auth';
 import { formatMobile, telHref } from '@/lib/mobile';
 import { addDays, formatManilaDate, formatManilaTime, manilaToUtc } from '@/lib/time';
 
 import { TodayList, type TodayBooking } from './today-list';
 import { Flash } from './ui';
+import { WalkInForm } from './walk-in-form';
 
 export const metadata: Metadata = { title: 'Today' };
 // The front desk must never see a cached list.
@@ -27,16 +32,21 @@ export default async function TodayPage({
 }: {
   searchParams: Promise<{ date?: string; denied?: string; done?: string; error?: string; cancel?: string }>;
 }) {
-  await requireStaff();
+  await requireDesk();
   const params = await searchParams;
 
   const today = todayInManila();
   const date = /^\d{4}-\d{2}-\d{2}$/.test(params.date ?? '') ? params.date! : today;
   const isToday = date === today;
 
-  const [{ live, cancelled }, counts] = await Promise.all([
+  const [{ live, cancelled }, counts, doctorList] = await Promise.all([
     loadDay(date, isToday),
     getDayCounts(date),
+    db
+      .select({ id: doctors.id, fullName: doctors.fullName })
+      .from(doctors)
+      .where(eq(doctors.isActive, true))
+      .orderBy(asc(doctors.sortOrder), asc(doctors.fullName)),
   ]);
   const seen = counts.arrived + counts.no_show;
   const expected = counts.booked + seen;
@@ -107,6 +117,9 @@ export default async function TodayPage({
           <div className="h-full rounded-full bg-brand-600" style={{ width: `${progress}%` }} />
         </div>
       </div>
+
+      {/* Only on today: a queue number is for now, not for a day still to come. */}
+      {isToday ? <WalkInForm doctors={doctorList} /> : null}
 
       <div className="mt-6">
         {live.length === 0 ? (

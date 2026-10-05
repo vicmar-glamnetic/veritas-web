@@ -1,24 +1,36 @@
 import assert from 'node:assert/strict';
-import { after, describe, it } from 'node:test';
+import { randomUUID } from 'node:crypto';
+import { after, before, describe, it } from 'node:test';
 
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 
-import { queueCounters, queueTickets } from '@/db/schema';
+import { doctors, patients, queueCounters, queueTickets, rooms } from '@/db/schema';
 import { testDb, warmPool } from '@/test/fixtures';
 
 import { isUniqueViolation } from './booking';
-import { callNextTicket, getQueueTickets, issueWalkInTicket, recallTicket } from './queue-service';
+import {
+  callNextForRoom,
+  finishTicket,
+  getQueueTickets,
+  issueWalkInTicket,
+  recallSkipped,
+  skipTicket,
+  startTicket,
+  undoCall,
+  type CallResult,
+} from './queue-service';
 
 /**
- * Queue numbering under concurrency.
+ * Queue numbering and calling, against a real database.
  *
  * Two receptionists pressing Arrived in the same second must not hand the same number to
- * two patients, and a number must never be skipped or reused. The guarantee lives in
- * Postgres — the row lock on queue_counters, with the unique index as the backstop — so
- * these tests need a real database.
+ * two patients, and two rooms pressing Call at once must not be handed the same patient.
+ * Both guarantees live in Postgres — the counter's row lock, SKIP LOCKED, and the unique
+ * indexes — so these tests need it.
  *
  * Dates are pinned in the future and unique to this file. A day's numbering is global by
- * definition, so two files sharing a date would sabotage each other.
+ * definition, so two files sharing a date would sabotage each other. Rooms and doctors
+ * get a random suffix, because their names are unique and a failed run leaves debris.
  */
 
 const { db, pool, close } = testDb(12);
@@ -26,35 +38,84 @@ const { db, pool, close } = testDb(12);
 const DATE_A = '2027-07-05';
 const DATE_B = '2027-07-06';
 const DATE_C = '2027-07-07';
-const DATES = [DATE_A, DATE_B, DATE_C];
+const DATE_D = '2027-07-08';
+const DATE_E = '2027-07-09';
+const DATES = [DATE_A, DATE_B, DATE_C, DATE_D, DATE_E];
+
+const run = randomUUID().slice(0, 8);
+let lab1: string;
+let lab2: string;
+let xray: string;
+let consult1: string;
+let consult2: string;
+let reyes: string;
+let santos: string;
+
+const walkIn = (date: string, category: 'consultation' | 'laboratory' | 'imaging', doctorId?: string | null) =>
+  issueWalkInTicket(db, { staffId: null, serviceDate: date, category, doctorId });
+
+const call = (date: string, roomId: string, doctorId: string | null = null) =>
+  callNextForRoom(db, { serviceDate: date, roomId, doctorId, staffId: null });
+
+const numberOf = (result: CallResult) => (result.ok ? result.ticket.number : null);
+
+before(async () => {
+  const made = await db
+    .insert(rooms)
+    .values([
+      { name: `Phlebotomy 1 ${run}`, category: 'laboratory' },
+      { name: `Phlebotomy 2 ${run}`, category: 'laboratory' },
+      { name: `X-ray ${run}`, category: 'imaging' },
+      { name: `Consultation 1 ${run}`, category: 'consultation' },
+      { name: `Consultation 2 ${run}`, category: 'consultation' },
+    ])
+    .returning({ id: rooms.id });
+  [lab1, lab2, xray, consult1, consult2] = made.map((r) => r.id);
+
+  const docs = await db
+    .insert(doctors)
+    .values([
+      { fullName: `Dra. Reyes ${run}`, specialty: 'Family Medicine' },
+      { fullName: `Dr. Santos ${run}`, specialty: 'Internal Medicine' },
+    ])
+    .returning({ id: doctors.id });
+  [reyes, santos] = docs.map((d) => d.id);
+});
 
 after(async () => {
-  for (const date of DATES) {
-    await db.delete(queueTickets).where(eq(queueTickets.serviceDate, date));
-    await db.delete(queueCounters).where(eq(queueCounters.serviceDate, date));
-  }
+  const tickets = await db
+    .select({ patientId: queueTickets.patientId })
+    .from(queueTickets)
+    .where(inArray(queueTickets.serviceDate, DATES));
+  const patientIds = tickets.map((t) => t.patientId).filter((id): id is string => id !== null);
+
+  await db.delete(queueTickets).where(inArray(queueTickets.serviceDate, DATES));
+  await db.delete(queueCounters).where(inArray(queueCounters.serviceDate, DATES));
+  if (patientIds.length) await db.delete(patients).where(inArray(patients.id, patientIds));
+  await db.delete(rooms).where(inArray(rooms.id, [lab1, lab2, xray, consult1, consult2]));
+  await db.delete(doctors).where(inArray(doctors.id, [reyes, santos]));
   await close();
 });
 
 describe('issuing numbers', () => {
   it('starts at 1 and counts up within a category', async () => {
-    const first = await issueWalkInTicket(db, null, DATE_A, 'consultation');
-    const second = await issueWalkInTicket(db, null, DATE_A, 'consultation');
-    const third = await issueWalkInTicket(db, null, DATE_A, 'consultation');
+    const first = await walkIn(DATE_A, 'consultation');
+    const second = await walkIn(DATE_A, 'consultation');
+    const third = await walkIn(DATE_A, 'consultation');
 
     assert.deepEqual([first.number, second.number, third.number], [1, 2, 3]);
   });
 
   it('numbers each category separately', async () => {
-    const lab = await issueWalkInTicket(db, null, DATE_A, 'laboratory');
-    const imaging = await issueWalkInTicket(db, null, DATE_A, 'imaging');
+    const lab = await walkIn(DATE_A, 'laboratory');
+    const imaging = await walkIn(DATE_A, 'imaging');
 
     assert.equal(lab.number, 1);
     assert.equal(imaging.number, 1);
   });
 
   it('restarts on the next clinic day', async () => {
-    const tomorrow = await issueWalkInTicket(db, null, DATE_B, 'consultation');
+    const tomorrow = await walkIn(DATE_B, 'consultation');
     assert.equal(tomorrow.number, 1);
   });
 
@@ -70,7 +131,7 @@ describe('issuing numbers', () => {
     await warmPool(pool, 10);
 
     const issued = await Promise.all(
-      Array.from({ length: 10 }, () => issueWalkInTicket(db, null, DATE_C, 'consultation')),
+      Array.from({ length: 10 }, () => walkIn(DATE_C, 'consultation')),
     );
 
     const numbers = issued.map((t) => t.number).sort((a, b) => a - b);
@@ -95,60 +156,193 @@ describe('issuing numbers', () => {
 
     assert.equal(counter.last, tickets.length);
   });
+
+  it('records who a named walk-in was, as a walk-in patient', async () => {
+    const ticket = await issueWalkInTicket(db, {
+      staffId: null,
+      serviceDate: DATE_C,
+      category: 'laboratory',
+      patient: { fullName: `Ana Walkin ${run}`, mobile: '+639171234567' },
+    });
+
+    const [row] = await db
+      .select({ source: patients.source, name: patients.fullName })
+      .from(queueTickets)
+      .innerJoin(patients, eq(patients.id, queueTickets.patientId))
+      .where(eq(queueTickets.id, ticket.id));
+
+    assert.equal(row.source, 'walkin');
+    assert.equal(row.name, `Ana Walkin ${run}`);
+  });
+
+  it('never puts a laboratory or imaging number in a doctor’s line', async () => {
+    const ticket = await walkIn(DATE_C, 'imaging', reyes);
+    const [row] = await db
+      .select({ doctorId: queueTickets.doctorId })
+      .from(queueTickets)
+      .where(eq(queueTickets.id, ticket.id));
+
+    assert.equal(row.doctorId, null);
+  });
 });
 
-describe('calling the next number', () => {
-  it('moves the first waiting ticket onto the board', async () => {
-    const called = await callNextTicket(db, null, DATE_A, 'laboratory');
-    assert.equal(called?.number, 1);
+describe('a room calling its line', () => {
+  it('puts the first waiting number on the board, with the room', async () => {
+    // DATE_A laboratory has L-001 waiting from above.
+    const result = await call(DATE_A, lab1);
+    assert.equal(numberOf(result), 1);
 
     const board = await getQueueTickets(db, DATE_A);
     const serving = board.filter((t) => t.category === 'laboratory' && t.status === 'called');
     assert.equal(serving.length, 1);
-    assert.equal(serving[0].number, 1);
+    assert.equal(serving[0].roomName, `Phlebotomy 1 ${run}`);
   });
 
-  it('finishes the previous one, so only one number is ever on the board', async () => {
-    await issueWalkInTicket(db, null, DATE_A, 'laboratory');
-    const second = await callNextTicket(db, null, DATE_A, 'laboratory');
-    assert.equal(second?.number, 2);
+  it('will not call a second patient into a room that still has one', async () => {
+    await walkIn(DATE_A, 'laboratory');
+    const result = await call(DATE_A, lab1);
 
-    const board = await getQueueTickets(db, DATE_A);
-    const lab = board.filter((t) => t.category === 'laboratory');
-    assert.equal(lab.filter((t) => t.status === 'called').length, 1);
-    assert.equal(lab.filter((t) => t.status === 'done').length, 1);
+    assert.deepEqual(result, { ok: false, reason: 'room_busy' });
   });
 
-  it('returns null rather than inventing a patient when nobody is waiting', async () => {
-    const empty = await callNextTicket(db, null, DATE_B, 'imaging');
-    assert.equal(empty, null);
+  it('frees the room on Finish, and the next call takes the next number', async () => {
+    assert.equal(await finishTicket(db, lab1), true);
+    assert.equal(numberOf(await call(DATE_A, lab1)), 2);
+  });
+
+  it('says so rather than inventing a patient when nobody is waiting', async () => {
+    assert.deepEqual(await call(DATE_B, xray), { ok: false, reason: 'nobody_waiting' });
   });
 
   /*
-   * Two rooms pressing Call next at the same moment. Both may succeed in advancing the
-   * queue, but they must never be handed the same number — that would send one patient
-   * to two rooms and leave the other uncalled.
+   * Two laboratory rooms share one line. Pressing Call at the same moment, each must get
+   * a patient, and never the same one. (This passes with plain FOR UPDATE too: Postgres
+   * re-checks a locked row after the wait and moves on. SKIP LOCKED only saves the wait.)
    */
-  it('never hands the same number to two rooms', async () => {
-    await warmPool(pool, 4);
-    for (let i = 0; i < 4; i++) await issueWalkInTicket(db, null, DATE_B, 'laboratory');
+  it('closes a number left on the board from an earlier day before calling', async () => {
+    // lab1 still has L-002 from DATE_A on the board. On a later day it must not block.
+    await walkIn(DATE_D, 'laboratory');
+    assert.equal(numberOf(await call(DATE_D, lab1)), 1);
 
-    const results = await Promise.all([
-      callNextTicket(db, null, DATE_B, 'laboratory'),
-      callNextTicket(db, null, DATE_B, 'laboratory'),
-    ]);
-
-    const numbers = results.filter((r) => r !== null).map((r) => r!.number);
-    assert.equal(new Set(numbers).size, numbers.length, 'no number was called twice');
+    const stale = await getQueueTickets(db, DATE_A);
+    assert.equal(stale.find((t) => t.category === 'laboratory' && t.number === 2)?.status, 'done');
+    await finishTicket(db, lab1);
   });
 
-  it('puts a mis-tapped call back at the front of the queue', async () => {
-    await recallTicket(db, DATE_A, 'laboratory');
+  it('gives two rooms on one line two different patients at once', async () => {
+    await warmPool(pool, 4);
+    for (let i = 0; i < 4; i++) await walkIn(DATE_D, 'laboratory');
 
-    const board = await getQueueTickets(db, DATE_A);
-    const lab = board.filter((t) => t.category === 'laboratory');
-    assert.equal(lab.filter((t) => t.status === 'called').length, 0);
-    assert.ok(lab.some((t) => t.number === 2 && t.status === 'waiting'));
+    const results = await Promise.all([call(DATE_D, lab1), call(DATE_D, lab2)]);
+    const numbers = results.map(numberOf);
+
+    assert.ok(numbers.every((n) => n !== null), 'both rooms got somebody');
+    assert.equal(new Set(numbers).size, 2, 'and not the same somebody');
+  });
+
+  /*
+   * Two people in the same room pressing Call at once. Whatever the interleaving, the
+   * room must end up with one number on the board, not two; the partial unique index on a
+   * room's called ticket is the guarantee.
+   */
+  it('never puts two numbers on the board for one room', async () => {
+    await finishTicket(db, lab1);
+    await warmPool(pool, 4);
+
+    await Promise.all([call(DATE_D, lab1), call(DATE_D, lab1), call(DATE_D, lab1)]);
+
+    const inRoom = await db
+      .select({ id: queueTickets.id })
+      .from(queueTickets)
+      .where(and(eq(queueTickets.roomId, lab1), eq(queueTickets.status, 'called')));
+    assert.equal(inRoom.length, 1);
+  });
+});
+
+describe('each doctor’s own line', () => {
+  it('calls only that doctor’s patients, plus first-available walk-ins', async () => {
+    const forSantos = await walkIn(DATE_E, 'consultation', santos); // C-001
+    const anyDoctor = await walkIn(DATE_E, 'consultation', null); // C-002
+
+    // Reyes skips Santos' patient and takes the walk-in waiting for anyone.
+    const result = await call(DATE_E, consult1, reyes);
+    assert.equal(numberOf(result), anyDoctor.number);
+
+    // Who called them now owns them, so the record says which doctor saw them.
+    const [row] = await db
+      .select({ doctorId: queueTickets.doctorId })
+      .from(queueTickets)
+      .where(eq(queueTickets.id, anyDoctor.id));
+    assert.equal(row.doctorId, reyes);
+
+    // Santos' patient is still waiting for Santos.
+    assert.equal(numberOf(await call(DATE_E, consult2, santos)), forSantos.number);
+  });
+
+  it('refuses a consultation room with no doctor to call for', async () => {
+    await finishTicket(db, consult1);
+    assert.deepEqual(await call(DATE_E, consult1, null), { ok: false, reason: 'no_doctor' });
+  });
+});
+
+describe('skip and recall', () => {
+  it('a recalled patient goes to the front of the line', async () => {
+    // I-001, I-002, I-003 on DATE_B.
+    for (let i = 0; i < 3; i++) await walkIn(DATE_B, 'imaging');
+
+    assert.equal(numberOf(await call(DATE_B, xray)), 1);
+    assert.equal(await skipTicket(db, xray), true);
+
+    assert.equal(numberOf(await call(DATE_B, xray)), 2);
+    await finishTicket(db, xray);
+
+    // I-001 turns up after all. Recalled, they go ahead of I-003.
+    const [first] = await db
+      .select({ id: queueTickets.id })
+      .from(queueTickets)
+      .where(
+        and(
+          eq(queueTickets.serviceDate, DATE_B),
+          eq(queueTickets.category, 'imaging'),
+          eq(queueTickets.number, 1),
+        ),
+      );
+    assert.equal(await recallSkipped(db, first.id), true);
+    assert.equal(numberOf(await call(DATE_B, xray)), 1);
+  });
+
+  it('only once: a second no-show cannot be recalled', async () => {
+    assert.equal(await skipTicket(db, xray), true);
+
+    const [first] = await db
+      .select({ id: queueTickets.id })
+      .from(queueTickets)
+      .where(
+        and(
+          eq(queueTickets.serviceDate, DATE_B),
+          eq(queueTickets.category, 'imaging'),
+          eq(queueTickets.number, 1),
+        ),
+      );
+    assert.equal(await recallSkipped(db, first.id), false);
+  });
+
+  it('cannot skip somebody who has already started', async () => {
+    assert.equal(numberOf(await call(DATE_B, xray)), 3);
+    assert.equal(await startTicket(db, xray), true);
+    assert.equal(await skipTicket(db, xray), false);
+    assert.equal(await finishTicket(db, xray), true);
+  });
+
+  it('undo puts a mis-tapped call back in its place', async () => {
+    await walkIn(DATE_B, 'imaging'); // I-004
+    assert.equal(numberOf(await call(DATE_B, xray)), 4);
+    assert.equal(await undoCall(db, xray), true);
+
+    const board = await getQueueTickets(db, DATE_B);
+    const four = board.find((t) => t.category === 'imaging' && t.number === 4);
+    assert.equal(four?.status, 'waiting');
+    assert.equal(four?.roomName, null);
   });
 });
 

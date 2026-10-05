@@ -4,7 +4,8 @@ import Link from 'next/link';
 import { asc } from 'drizzle-orm';
 
 import { db } from '@/db';
-import { staffUsers } from '@/db/schema';
+import { doctors, staffUsers } from '@/db/schema';
+import { ROLE_LABEL } from '@/lib/admin/roles';
 import { requireAdmin } from '@/lib/auth';
 import { formatManilaDateTime } from '@/lib/time';
 
@@ -22,7 +23,14 @@ export default async function StaffPage({
 }) {
   const me = await requireAdmin();
   const { done, error, edit, new: isNew } = await searchParams;
-  const list = await db.select().from(staffUsers).orderBy(asc(staffUsers.name));
+  const [list, doctorList] = await Promise.all([
+    db.select().from(staffUsers).orderBy(asc(staffUsers.name)),
+    db
+      .select({ id: doctors.id, fullName: doctors.fullName })
+      .from(doctors)
+      .orderBy(asc(doctors.sortOrder), asc(doctors.fullName)),
+  ]);
+  const doctorName = new Map(doctorList.map((d) => [d.id, d.fullName]));
   const editing = edit ? list.find((u) => u.id === edit) : undefined;
   const showForm = Boolean(editing) || isNew === '1';
 
@@ -31,7 +39,7 @@ export default async function StaffPage({
       <Flash done={done} error={error} />
       <PageTitle
         title="Staff users"
-        lead="Admin accounts can change settings and manage staff. Reception accounts can do everything else. Deactivating someone signs them out immediately."
+        lead="Admin and reception run the desk; only admin changes settings and staff. Doctor, laboratory and imaging accounts see their room and the waiting room screen, nothing else. Deactivating someone signs them out immediately."
         actions={
           !showForm ? (
             <RowDialog
@@ -40,7 +48,7 @@ export default async function StaffPage({
               trigger="Add a staff member"
               triggerClassName="inline-flex min-h-[2.5rem] items-center rounded border border-brand-700 bg-brand-700 px-4 text-sm font-semibold text-white hover:bg-brand-800"
             >
-              <StaffForm />
+              <StaffForm doctors={doctorList} />
             </RowDialog>
           ) : undefined
         }
@@ -48,7 +56,7 @@ export default async function StaffPage({
 
       {showForm ? (
         <Panel title={editing ? `Editing ${editing.name}` : 'Add a staff member'}>
-          <StaffForm user={editing} />
+          <StaffForm user={editing} doctors={doctorList} />
           <p className="mt-4 text-sm">
             <Link href="/admin/staff" className="text-brand-700 underline underline-offset-4">
               Back to the list
@@ -67,8 +75,13 @@ export default async function StaffPage({
               <p className="font-semibold text-ink-900">
                 {user.name}
                 <span className="ml-2 rounded-full bg-surface-sunken px-2 py-0.5 text-xs font-semibold text-ink-700 ring-1 ring-line-strong">
-                  {user.role === 'admin' ? 'Admin' : 'Reception'}
+                  {ROLE_LABEL[user.role]}
                 </span>
+                {user.doctorId ? (
+                  <span className="ml-2 text-sm font-normal text-ink-500">
+                    {doctorName.get(user.doctorId)}
+                  </span>
+                ) : null}
                 {user.id === me.id ? <span className="ml-2 text-xs text-ink-400">This is you</span> : null}
                 {!user.isActive ? <span className="ml-2 text-xs font-semibold text-ink-500">Not active</span> : null}
               </p>
@@ -84,7 +97,7 @@ export default async function StaffPage({
               trigger="Edit"
               triggerClassName="rounded border border-line-strong px-3 py-1.5 text-sm font-semibold text-ink-900 hover:border-brand-400 hover:bg-brand-50"
             >
-              <StaffForm user={user} />
+              <StaffForm user={user} doctors={doctorList} />
               {user.id !== me.id ? (
                 <DeleteZone
                   action={deleteStaff}
@@ -109,7 +122,13 @@ export default async function StaffPage({
 }
 
 /** Shared by the dialog and the no-JavaScript fallback panel. */
-function StaffForm({ user }: { user?: typeof staffUsers.$inferSelect }) {
+function StaffForm({
+  user,
+  doctors,
+}: {
+  user?: typeof staffUsers.$inferSelect;
+  doctors: { id: string; fullName: string }[];
+}) {
   return (
     <form action={saveStaff} className="grid gap-4 sm:grid-cols-2">
       {user ? <input type="hidden" name="id" value={user.id} /> : null}
@@ -123,6 +142,21 @@ function StaffForm({ user }: { user?: typeof staffUsers.$inferSelect }) {
         <Select name="role" defaultValue={user?.role ?? 'reception'}>
           <option value="reception">Reception</option>
           <option value="admin">Admin</option>
+          <option value="doctor">Doctor</option>
+          <option value="laboratory">Laboratory</option>
+          <option value="imaging">Imaging</option>
+        </Select>
+      </Field>
+      {/* Always shown rather than revealed by script, so it works with JavaScript off.
+          The server ignores it for every role but Doctor. */}
+      <Field label="Doctor" hint="For doctor accounts only: whose patients this login calls.">
+        <Select name="doctorId" defaultValue={user?.doctorId ?? ''}>
+          <option value="">Not a doctor account</option>
+          {doctors.map((d) => (
+            <option key={d.id} value={d.id}>
+              {d.fullName}
+            </option>
+          ))}
         </Select>
       </Field>
       <Field

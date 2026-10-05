@@ -163,8 +163,10 @@ viewing · billing · laboratory or imaging modules.
 
 Queue display and queue numbering were on this list until the client asked for them.
 What exists now is described under "The queue and the waiting room board": reception
-issues numbers, staff call them, the board shows them. Still not built, and still a later
-phase: per-room queues, printed tickets, skip-and-recall policy, and any reporting on
+issues numbers, each room calls its own line, the board shows them with the room. Still
+not built, and still a later phase: the cashier step (the client wants it **last**, after
+the doctor has decided what tests are needed), doctor orders issuing L-/I- numbers,
+printed tickets, transfers between rooms, priority patients, and any reporting on
 waiting times.
 
 ## Commands
@@ -217,9 +219,16 @@ Environment variables are documented in `.env.example`. Never commit a real one.
 `/admin` is guarded by `(app)/layout.tsx`, which calls `requireStaff()`. `/admin/login`
 sits outside that group so it can render unauthenticated.
 
-**Every server action calls `requireStaff()` or `requireAdmin()` for itself.** An action
-is its own endpoint and is reachable without the protecting layout ever rendering, so
-the page guard alone secures nothing.
+**Every server action calls `requireStaff()`, `requireDesk()` or `requireAdmin()` for
+itself.** An action is its own endpoint and is reachable without the protecting layout
+ever rendering, so the page guard alone secures nothing.
+
+- **Roles.** `admin` and `reception` are the desk (`requireDesk()`): Today, bookings,
+  schedules, prices, doctors, rooms, promos. `doctor`, `laboratory` and `imaging` work a
+  room: they get My room and the waiting room screen and are redirected to My room from
+  everything else. A `doctor` account is linked to exactly one `doctors` row, enforced by
+  a check constraint and a unique index; that link is whose line they call. Use
+  `requireStaff()` only for screens every role needs.
 
 - Sessions are rows in `staff_sessions`, not a self-contained signed cookie, so
   deactivating a staff member ends their access on the next request. The cookie holds an
@@ -288,48 +297,55 @@ with a booking reference that carries no order.
 - **Numbering restarts each Manila day** because it is scoped to `service_date`. No job
   resets anything. A number is never reused within a day, even if its ticket is voided —
   a number shown to a waiting room must not be handed to somebody else.
-- **Nothing advances on its own.** Staff press Call next, which finishes whoever is on
-  the board and promotes the lowest waiting number. The allowed-from status is re-checked
-  in the UPDATE's WHERE clause, as booking status changes are, so two rooms pressing at
-  once cannot be handed the same patient. Undo a call puts the number back at the front.
-- **`/admin/monitor` has the controls; `/admin/monitor?display=1` does not.** The wall
-  screen shows numbers and nothing pressable. Both are behind `requireStaff()`, repeated
-  in the route's own layout because the `(app)` guard does not reach it.
+- **Each doctor has their own line** (the client's answer). A consultation ticket carries
+  `doctor_id` from the booking. A walk-in given no doctor is "first available": it sits in
+  every doctor's line (`isInLine`) and takes the `doctor_id` of whoever calls it.
+  Laboratory and imaging are one line each, shared by all their rooms.
+- **Rooms call; nothing else does.** `/admin/station` (My room) is the only place a number
+  is called from. Staff pick a room once per sign-in; it is stored on `staff_sessions`,
+  not the account, because the client said rooms are chosen at sign-in. Every station
+  action reads the room from the session, never from the form.
+- **One patient per room.** Call is refused while the room still has somebody on the
+  board; they are finished, skipped or undone first. A partial unique index on
+  `queue_tickets (room_id) where status = 'called'` is the guarantee, proved by the
+  same-room race in `queue.db.test.ts` (drop the index and it fails). Two rooms on one
+  line get different patients via `FOR UPDATE SKIP LOCKED` plus the status re-check —
+  the SKIP saves waiting, it is not what makes it correct. A call left on the board from
+  an earlier day is closed by the next call, or the room would refuse every call while
+  its screen, which shows only today, says it is free.
+- **Call → Start → Finish.** `started_at` is when the patient walked in, so waiting and
+  service time can be reported later. Skip and Undo are only allowed before Start.
+- **Skipped patients go to the front, once** (the client's answer). `recalled_at` is both
+  the ordering (`recalled_at nulls last, number`; `compareInLine` is the pure twin) and
+  the once-only guard, enforced in the UPDATE's WHERE clause.
+- **`/admin/monitor` has screen settings only; `/admin/monitor?display=1` has nothing.**
+  Both are behind `requireStaff()`, repeated in the route's own layout because the
+  `(app)` guard does not reach it.
 - **A public wall gets the minimum.** `shortenName` cuts the name to "Corazon A."; a
   walk-in with no name shows the number alone. No surname, no mobile, no email and **no
   service name** — "Chest X-ray" beside a name is a diagnosis hint. `getQueueTickets`
   selects those columns and no others, so the rest cannot reach the page even inside an
   unrendered prop.
+- **The board shows one number per room**, in room order, and the announcement says the
+  room: "C-021 — Corazon A., please proceed to Consultation Room 1".
 - **The announcement line is the most recent call by `called_at`, across all three
   categories.** It first took the first category that had anything on its board, which is
   consultation whenever consultation is busy — so calling a laboratory or imaging number
   changed nothing on the line, and the spoken announcement, which fires on that line
   changing, never said them at all. The dead `lastCalledId` parameter that nothing ever
   passed is what disguised it. Covered by `queue.test.ts`.
-- **Auto mode is off by default and never runs on the wall screen.** It calls the next
-  number every 10, 30, 60 or 120 seconds, rotating one category per tick so a single
-  number changes at a time and a busy consultation list cannot starve the other two. It
-  is gated on `showControls`, because two screens each running their own timer would
-  double-call every patient. The timer reads the panels through a ref: `panels` is a new
-  array on every server render and the board refreshes every 15 seconds, so depending on
-  it reset the interval four times a minute — every gap became ~15s whatever was chosen,
-  and at the default of 30s it never fired at all. `nextAutoCategory` is pure and pinned
-  in `queue.test.ts`; the timing is pinned in the browser suite.
-- **The controls are grouped by category, not by verb.** One block per category, in the
-  same order and accent as the panels above it, holding that category's call, walk-in and
-  undo. Grouped the other way — a row of call buttons, a row of walk-in buttons, a row of
-  undo links — the word "Consultation" appeared on three buttons that did three different
-  things, told apart only by a caption at the left of each row that moved away on wrap.
-- **The buttons name the number they act on.** "Call C-015", "Undo C-014", and "No one
-  waiting" where a disabled button would otherwise sit there unexplained. Each
+- **Auto mode and the board's Call / Walk-in / Undo buttons were removed** when calling
+  moved to rooms: a board-wide "call next consultation" has no answer once each doctor
+  has a line, and a number called from the board has no room to send anyone to. If the
+  client wants Auto back, it belongs on My room, per room.
+- **The buttons name the number they act on.** "Call C-015", and "No one waiting" where a
+  disabled button would otherwise sit there unexplained. Each
   `aria-label` contains the visible text, so somebody driving the screen by voice can say
   what they can read.
 - **Every control disables itself while its post is in flight**, through `useFormStatus`,
-  which is why the three buttons are components rather than markup: the hook reports on
+  which is why My room's `SubmitButton` is a component rather than markup: the hook reports on
   the nearest enclosing form and only from inside it. Without it a second tap on a slow
   connection calls a second patient, and the room sees a number nobody was ready for.
-- **The auto interval only appears once auto is on.** A dropdown governing a switched-off
-  feature is a question the desk cannot answer.
 - Refreshing is `router.refresh()` every 15 seconds, so the board repaints without the
   page flashing white in front of the room. With JavaScript off it falls back to a meta
   refresh written with `dangerouslySetInnerHTML` inside `<noscript>` — React 19 hoists a
@@ -338,9 +354,9 @@ with a booking reference that carries no order.
 - Voice announcement is off by default, remembered per screen, and announces a change
   only — never the call already on screen when the page loaded.
 - `npm run db:demo-today` checks two patients in per category and calls the first of
-  each, then winds `queue_counters` back to the tickets that survive, so a demo starts at
-  C-001 every time. It clears walk-in tickets that have no booking and no patient, which
-  only the demo walk-in button produces.
+  each into the first free room of that kind, then winds `queue_counters` back to the
+  tickets that survive, so a demo starts at C-001 every time. It clears walk-in tickets
+  that have no booking and no patient; the desk's walk-in form always takes a name.
 
 ## Layouts
 

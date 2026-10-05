@@ -165,7 +165,8 @@ service_category  consultation | laboratory | imaging
 booking_status    booked | cancelled_by_patient | cancelled_by_clinic | arrived | no_show
 booking_actor     patient | staff | system
 patient_source    online | walkin
-staff_role        admin | reception
+staff_role        admin | reception | doctor | laboratory | imaging
+queue_status      waiting | called | done | skipped
 ```
 
 ### Tables
@@ -234,10 +235,16 @@ constraint enforces that `actor = 'staff'` if and only if `actor_staff_user_id` 
 **`promos`** — `id, title, body, image_url, starts_on, ends_on, is_active, sort_order,
 created_at`
 
-**`staff_users`** — `id, name, email, password_hash, role, is_active, last_login_at,
-created_at`
+**`staff_users`** — `id, name, email, password_hash, role, doctor_id, is_active,
+last_login_at, created_at`. `doctor_id` is set for doctor accounts and only for them (a
+check constraint), and is unique: one login per doctor.
 
-**`staff_sessions`** — `id, staff_user_id, token_hash, expires_at, revoked_at, created_at`
+**`staff_sessions`** — `id, staff_user_id, token_hash, expires_at, revoked_at, room_id,
+station_doctor_id, created_at`. The room is chosen on My room and lives on the session,
+because it is a fact about today: the next sign-in asks again.
+
+**`rooms`** — `id, name, category, sort_order, is_active, created_at`. Where a patient is
+sent: "Consultation Room 2", "Phlebotomy". Deactivated, never deleted, once used.
 
 **`site_settings`** — a single row, `id = 1` enforced by a check constraint. Clinic name,
 address, phones, email, Facebook URL, opening hours text, map embed URL,
@@ -417,18 +424,22 @@ accident.
 
 | Screen | Role | What it does |
 |---|---|---|
-| **Today** | any | The day's bookings in time order. Progress ("3 of 9 seen"), the next unseen patient marked, overdue rows tinted, a client-side filter to find whoever is at the counter, and the patient's preparation instructions shown so the desk can check them. Arrived / Did not come / Cancel. |
-| **Bookings** | any | Filter by date range, doctor, service and status; search by reference, mobile or name. Filters live in the query string, so a useful view can be bookmarked and it works as a plain GET. |
-| **Schedules** | any | Create and edit sessions; add closed days. **A closed day lists the patients who now need ringing, with tap-to-call numbers.** |
-| **Services and prices** | any | The single price list. Search and category filter; edit in a dialog. |
-| **Doctors** | any | Add, edit, deactivate. |
-| **Promos** | any | Add with start and end dates; they appear and disappear by themselves. |
+| **Today** | desk | The day's bookings in time order. Progress ("3 of 9 seen"), the next unseen patient marked, overdue rows tinted, a client-side filter to find whoever is at the counter, and the patient's preparation instructions shown so the desk can check them. Arrived / Did not come / Cancel. |
+| **Bookings** | desk | Filter by date range, doctor, service and status; search by reference, mobile or name. Filters live in the query string, so a useful view can be bookmarked and it works as a plain GET. |
+| **Schedules** | desk | Create and edit sessions; add closed days. **A closed day lists the patients who now need ringing, with tap-to-call numbers.** |
+| **Services and prices** | desk | The single price list. Search and category filter; edit in a dialog. |
+| **Doctors** | desk | Add, edit, deactivate. |
+| **Promos** | desk | Add with start and end dates; they appear and disappear by themselves. |
 | **Settings** | admin | Clinic details, opening hours, booking horizon. |
 | **Staff users** | admin | Accounts and roles. |
-| **Waiting room screen** | any | `/admin/monitor` — the queue board, with Call next / walk-in / undo. `?display=1` is the wall version with no controls. Opens in its own tab. |
+| **Rooms** | desk | The places patients are sent to, each serving one category. |
+| **My room** | any | `/admin/station` — choose a room once per sign-in, then Call, Start, Finish, Skip, Undo, and Recall a skipped patient. The only place numbers are called from. |
+| **Waiting room screen** | any | `/admin/monitor` — the queue board, with voice and full-screen settings. `?display=1` is the wall version with nothing pressable. Opens in its own tab. |
 
-Reception accounts do not see Settings or Staff users in the navigation and are
-redirected away if they type the URL.
+"desk" is admin and reception (`requireDesk()`). Doctor, laboratory and imaging accounts
+see My room and the waiting room screen, and are redirected to My room from anything
+else. Reception accounts do not see Settings or Staff users and are redirected away if
+they type the URL.
 
 ### The queue and the waiting room board
 
@@ -439,7 +450,13 @@ than the person in front of a doctor.
 
 **Reception creates the order.** Marking a patient Arrived takes the next number for that
 day and category, in the same transaction as the status change and the audit row. A
-walk-in with no appointment gets a number the same way.
+walk-in with no appointment is added on Today with a name and mobile, which makes a
+`walkin` patient record, and gets a number the same way.
+
+**Each doctor has their own line.** A consultation ticket carries the booked doctor. A
+walk-in can be given a doctor or left for the first available, in which case they sit in
+every doctor's line and belong to whoever calls them. Laboratory and imaging are one line
+each, shared by however many rooms serve them.
 
 **Numbers read `C-014`, `L-003`, `I-007`** — rendered from the category and the number by
 `formatTicket`, never stored, so ordering stays numeric. They restart each Manila day
@@ -452,21 +469,31 @@ unique index on `(service_date, category, number)` is the backstop. `queue.db.te
 proves both, and replacing the counter with `max(number) + 1` makes its stampede test
 fail.
 
-**Nothing advances on its own.** Staff press Call next; it finishes whoever is on the
-board and promotes the lowest waiting number, re-checking the status in the UPDATE's
-WHERE clause so two rooms cannot be handed the same patient. Undo puts a number back.
+**Rooms call; the board shows.** Each room works its line from My room: Call puts the
+next number on the board with the room's name, Start records that the patient came in,
+Finish frees the room. A room with somebody still on the board cannot call again, so
+nobody drops off the board without staff saying what happened to them. Two rooms on one
+line pressing Call at once get two different patients (`FOR UPDATE SKIP LOCKED`, the
+status re-checked in the UPDATE), and a partial unique index allows one called ticket per
+room. A call left on the board from an earlier day is closed before the next call.
 
-`/admin/monitor` carries the controls. `/admin/monitor?display=1` is the same board with
-nothing pressable, for the screen the patients see. Both require staff.
+**Skip and recall, once.** A called patient who does not come is skipped. If they turn up,
+Recall puts them at the front of their line; `recalled_at` is both the ordering and the
+once-only guard, enforced in the UPDATE's WHERE clause. Skipped again, they need a new
+number from reception. Undo puts a mis-tapped call back in its place.
+
+`/admin/monitor` has screen settings only. `/admin/monitor?display=1` is the same board
+with nothing pressable, for the screen the patients see. Both require staff.
 
 **What a public wall may show:** the number, and a name cut to "Corazon A." by
 `shortenName` — a walk-in with no name shows the number alone. No surname, no mobile, no
 email, no service name, because "Chest X-ray" beside a name is a diagnosis hint.
 `getQueueTickets` selects those columns and no others.
 
-It refreshes every 15 seconds with `router.refresh()`, and the buttons are plain form
-posts, so the whole screen works with JavaScript off. Voice announcement is off by
-default and announces only a change.
+It refreshes every 15 seconds with `router.refresh()`, as does My room, and every button
+is a plain form post, so both work with JavaScript off. Voice announcement is off by
+default, says the room ("Number C, zero two one. Please proceed to Consultation Room 2"),
+and announces only a change.
 
 ### Status changes
 

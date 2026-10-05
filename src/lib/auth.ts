@@ -9,6 +9,7 @@ import { cache } from 'react';
 
 import { db } from '@/db';
 import { staffSessions, staffUsers } from '@/db/schema';
+import { isDeskRole, type StaffRole } from '@/lib/admin/roles';
 
 /**
  * Staff authentication.
@@ -26,11 +27,20 @@ import { staffSessions, staffUsers } from '@/db/schema';
 const COOKIE_NAME = 'veritas_staff';
 const SESSION_HOURS = 12; // one clinic day; staff log in each morning
 
+
 export type Staff = {
   id: string;
   name: string;
   email: string;
-  role: 'admin' | 'reception';
+  role: StaffRole;
+  /** A doctor account's own doctor record; null for every other role. */
+  doctorId: string | null;
+  /** This sign-in session, so the station screen can record which room it is in. */
+  sessionId: string;
+  /** The room chosen on the station screen for this session, if any. */
+  roomId: string | null;
+  /** Whose consultation line this session calls, for a consultation room. */
+  stationDoctorId: string | null;
 };
 
 function secret(): string {
@@ -83,7 +93,11 @@ export const getCurrentStaff = cache(async (): Promise<Staff | null> => {
       name: staffUsers.name,
       email: staffUsers.email,
       role: staffUsers.role,
+      doctorId: staffUsers.doctorId,
       isActive: staffUsers.isActive,
+      sessionId: staffSessions.id,
+      roomId: staffSessions.roomId,
+      stationDoctorId: staffSessions.stationDoctorId,
     })
     .from(staffSessions)
     .innerJoin(staffUsers, eq(staffUsers.id, staffSessions.staffUserId))
@@ -99,7 +113,16 @@ export const getCurrentStaff = cache(async (): Promise<Staff | null> => {
   // Deactivating a staff member locks them out immediately, without hunting sessions.
   if (!row || !row.isActive) return null;
 
-  return { id: row.id, name: row.name, email: row.email, role: row.role };
+  return {
+    id: row.id,
+    name: row.name,
+    email: row.email,
+    role: row.role,
+    doctorId: row.doctorId,
+    sessionId: row.sessionId,
+    roomId: row.roomId,
+    stationDoctorId: row.stationDoctorId,
+  };
 });
 
 /**
@@ -109,6 +132,17 @@ export const getCurrentStaff = cache(async (): Promise<Staff | null> => {
 export async function requireStaff(): Promise<Staff> {
   const staff = await getCurrentStaff();
   if (!staff) redirect('/admin/login');
+  return staff;
+}
+
+/**
+ * The front desk's screens and actions: Today, bookings, schedules, prices, doctors,
+ * promos, rooms. A doctor, laboratory or imaging login works a room and is sent to its
+ * station instead — the proposal's "access limited to their role".
+ */
+export async function requireDesk(): Promise<Staff> {
+  const staff = await requireStaff();
+  if (!isDeskRole(staff.role)) redirect('/admin/station');
   return staff;
 }
 
@@ -131,6 +165,17 @@ export async function destroySession(): Promise<void> {
   }
 
   jar.delete(COOKIE_NAME);
+}
+
+/**
+ * Record which room this sign-in is working in. Lives on the session, so tomorrow's
+ * sign-in asks again and nobody has to remember to clear yesterday's room.
+ */
+export async function setStation(
+  sessionId: string,
+  station: { roomId: string | null; stationDoctorId: string | null },
+): Promise<void> {
+  await db.update(staffSessions).set(station).where(eq(staffSessions.id, sessionId));
 }
 
 /** Revokes every session a staff member holds, e.g. when they are deactivated. */

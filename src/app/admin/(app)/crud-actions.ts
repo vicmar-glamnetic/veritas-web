@@ -10,6 +10,8 @@ import {
   bookings,
   doctors,
   promos,
+  queueTickets,
+  rooms,
   sessionBlackouts,
   services,
   sessions,
@@ -17,12 +19,13 @@ import {
   staffSessions,
   staffUsers,
 } from '@/db/schema';
-import { requireAdmin, requireStaff, revokeAllSessions } from '@/lib/auth';
+import { requireAdmin, requireDesk, revokeAllSessions } from '@/lib/auth';
 import { hashPassword } from '@/lib/password';
 import {
   blackoutSchema,
   doctorSchema,
   promoSchema,
+  roomSchema,
   serviceSchema,
   sessionSchema,
   settingsSchema,
@@ -54,7 +57,7 @@ function refreshPublic(...paths: string[]) {
 /* ------------------------------- Doctors -------------------------------- */
 
 export async function saveDoctor(formData: FormData): Promise<void> {
-  await requireStaff();
+  await requireDesk();
   const parsed = doctorSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) back('/admin/doctors', firstIssue(parsed.error), true);
 
@@ -72,7 +75,7 @@ export async function saveDoctor(formData: FormData): Promise<void> {
 /* ------------------------------- Services ------------------------------- */
 
 export async function saveService(formData: FormData): Promise<void> {
-  await requireStaff();
+  await requireDesk();
   const parsed = serviceSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) back('/admin/services', firstIssue(parsed.error), true);
 
@@ -90,7 +93,7 @@ export async function saveService(formData: FormData): Promise<void> {
 /* ------------------------------- Sessions ------------------------------- */
 
 export async function saveSession(formData: FormData): Promise<void> {
-  await requireStaff();
+  await requireDesk();
   const parsed = sessionSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) back('/admin/schedules', firstIssue(parsed.error), true);
 
@@ -114,7 +117,7 @@ export async function saveSession(formData: FormData): Promise<void> {
 }
 
 export async function addBlackout(formData: FormData): Promise<void> {
-  await requireStaff();
+  await requireDesk();
   const parsed = blackoutSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) back('/admin/schedules', firstIssue(parsed.error), true);
 
@@ -124,7 +127,7 @@ export async function addBlackout(formData: FormData): Promise<void> {
 }
 
 export async function removeBlackout(formData: FormData): Promise<void> {
-  await requireStaff();
+  await requireDesk();
   const id = String(formData.get('id') ?? '');
   if (id) await db.delete(sessionBlackouts).where(eq(sessionBlackouts.id, id));
   refreshPublic('/book');
@@ -134,7 +137,7 @@ export async function removeBlackout(formData: FormData): Promise<void> {
 /* -------------------------------- Promos -------------------------------- */
 
 export async function savePromo(formData: FormData): Promise<void> {
-  await requireStaff();
+  await requireDesk();
   const parsed = promoSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) back('/admin/promos', firstIssue(parsed.error), true);
 
@@ -147,6 +150,32 @@ export async function savePromo(formData: FormData): Promise<void> {
 
   refreshPublic('/promos', '/');
   back('/admin/promos', id ? 'Promo updated.' : 'Promo added.');
+}
+
+/* -------------------------------- Rooms --------------------------------- */
+
+export async function saveRoom(formData: FormData): Promise<void> {
+  await requireDesk();
+  const parsed = roomSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) back('/admin/rooms', firstIssue(parsed.error), true);
+
+  const { id, ...values } = parsed.data;
+  try {
+    if (id) {
+      await db.update(rooms).set(values).where(eq(rooms.id, id));
+    } else {
+      await db.insert(rooms).values(values);
+    }
+  } catch (error) {
+    const e = error as { code?: string; cause?: { code?: string } };
+    if (e?.code === '23505' || e?.cause?.code === '23505') {
+      back('/admin/rooms', 'There is already a room with that name.', true);
+    }
+    throw error;
+  }
+
+  revalidatePath('/admin/monitor');
+  back('/admin/rooms', id ? 'Room updated.' : 'Room added.');
 }
 
 /* ------------------------------- Settings ------------------------------- */
@@ -194,9 +223,16 @@ export async function saveStaff(formData: FormData): Promise<void> {
       await db.insert(staffUsers).values({ ...values, passwordHash: await hashPassword(password) });
     }
   } catch (error) {
-    const e = error as { code?: string; cause?: { code?: string } };
+    const e = error as { code?: string; constraint?: string; cause?: { code?: string; constraint?: string } };
     if (e?.code === '23505' || e?.cause?.code === '23505') {
-      back('/admin/staff', 'That email address already has an account.', true);
+      const constraint = e.constraint ?? e.cause?.constraint;
+      back(
+        '/admin/staff',
+        constraint === 'staff_users_doctor_key'
+          ? 'That doctor already has an account. Each doctor signs in with their own one.'
+          : 'That email address already has an account.',
+        true,
+      );
     }
     throw error;
   }
@@ -233,7 +269,7 @@ async function countDependents(
 }
 
 export async function deleteDoctor(formData: FormData): Promise<void> {
-  await requireStaff();
+  await requireDesk();
   const id = String(formData.get('id') ?? '');
   if (!id) back('/admin/doctors', 'Nothing to delete.', true);
 
@@ -242,6 +278,26 @@ export async function deleteDoctor(formData: FormData): Promise<void> {
     back(
       '/admin/doctors',
       `This doctor is on ${used} booking${used === 1 ? '' : 's'}, so deleting would break the record. Untick Active instead to take them off the website and the booking form.`,
+      true,
+    );
+  }
+
+  // A walk-in seen by this doctor points at them through the queue, and their login
+  // points at them too. Both are history worth keeping.
+  const [queued] = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(queueTickets)
+    .where(eq(queueTickets.doctorId, id));
+  const [account] = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(staffUsers)
+    .where(eq(staffUsers.doctorId, id));
+  if ((queued?.n ?? 0) > 0 || (account?.n ?? 0) > 0) {
+    back(
+      '/admin/doctors',
+      (account?.n ?? 0) > 0
+        ? 'This doctor has a staff login. Delete or change that account first, or untick Active here instead.'
+        : 'This doctor has seen patients through the queue, so deleting would break that record. Untick Active instead.',
       true,
     );
   }
@@ -255,7 +311,7 @@ export async function deleteDoctor(formData: FormData): Promise<void> {
 }
 
 export async function deleteService(formData: FormData): Promise<void> {
-  await requireStaff();
+  await requireDesk();
   const id = String(formData.get('id') ?? '');
   if (!id) back('/admin/services', 'Nothing to delete.', true);
 
@@ -274,7 +330,7 @@ export async function deleteService(formData: FormData): Promise<void> {
 }
 
 export async function deleteSession(formData: FormData): Promise<void> {
-  await requireStaff();
+  await requireDesk();
   const id = String(formData.get('id') ?? '');
   if (!id) back('/admin/schedules', 'Nothing to delete.', true);
 
@@ -293,7 +349,7 @@ export async function deleteSession(formData: FormData): Promise<void> {
 }
 
 export async function deletePromo(formData: FormData): Promise<void> {
-  await requireStaff();
+  await requireDesk();
   const id = String(formData.get('id') ?? '');
   if (!id) back('/admin/promos', 'Nothing to delete.', true);
 
@@ -327,7 +383,46 @@ export async function deleteStaff(formData: FormData): Promise<void> {
     );
   }
 
+  // Queue numbers carry who issued and who called them, for the same reason.
+  const [worked] = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(queueTickets)
+    .where(
+      sql`${queueTickets.issuedByStaffUserId} = ${id} or ${queueTickets.calledByStaffUserId} = ${id}`,
+    );
+
+  if ((worked?.n ?? 0) > 0) {
+    back(
+      '/admin/staff',
+      `This person has issued or called ${worked.n} queue number${worked.n === 1 ? '' : 's'}, and deleting them would take their name off that history. Untick Active instead.`,
+      true,
+    );
+  }
+
   await db.delete(staffSessions).where(eq(staffSessions.staffUserId, id));
   await db.delete(staffUsers).where(eq(staffUsers.id, id));
   back('/admin/staff', 'Staff member deleted.');
+}
+
+export async function deleteRoom(formData: FormData): Promise<void> {
+  await requireDesk();
+  const id = String(formData.get('id') ?? '');
+  if (!id) back('/admin/rooms', 'Nothing to delete.', true);
+
+  // The board history says which room each number was called to.
+  const [used] = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(queueTickets)
+    .where(eq(queueTickets.roomId, id));
+
+  if ((used?.n ?? 0) > 0) {
+    back(
+      '/admin/rooms',
+      `Patients have been called to this room ${used.n} time${used.n === 1 ? '' : 's'}, and deleting it would take it off that record. Untick Active instead, which takes it off the room list.`,
+      true,
+    );
+  }
+
+  await db.delete(rooms).where(eq(rooms.id, id));
+  back('/admin/rooms', 'Room deleted.');
 }

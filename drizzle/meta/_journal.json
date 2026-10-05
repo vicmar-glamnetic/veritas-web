@@ -15,6 +15,13 @@
       "when": 1789835949819,
       "tag": "0001_adorable_ultimo",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1791177564420,
+      "tag": "0002_rooms_and_lines",
+      "breakpoints": true
     }
   ]
 }

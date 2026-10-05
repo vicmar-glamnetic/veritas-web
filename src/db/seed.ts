@@ -26,6 +26,9 @@ import {
   doctors,
   patients,
   promos,
+  queueCounters,
+  queueTickets,
+  rooms,
   serviceDoctors,
   services,
   sessionBlackouts,
@@ -206,6 +209,9 @@ async function main() {
   }
 
   console.log('Clearing existing data…');
+  // Queue tickets point at bookings, doctors and rooms with on delete restrict.
+  await db.delete(queueTickets);
+  await db.delete(queueCounters);
   await db.delete(bookingEvents);
   await db.delete(bookings);
   await db.delete(sessionBlackouts);
@@ -217,6 +223,7 @@ async function main() {
   await db.delete(promos);
   await db.delete(staffSessions);
   await db.delete(staffUsers);
+  await db.delete(rooms);
   await db.delete(siteSettings);
 
   console.log('Inserting site settings…');
@@ -339,6 +346,24 @@ async function main() {
     },
   ]);
 
+  /*
+   * Placeholder rooms, like everything else here: the clinic has not yet said how many
+   * consultation rooms it has. The names are what the waiting room screen says after
+   * "please proceed to", so they are written for patients.
+   */
+  console.log('Inserting rooms…');
+  const roomRows = await db
+    .insert(rooms)
+    .values([
+      { name: 'Consultation Room 1', category: 'consultation', sortOrder: 1 },
+      { name: 'Consultation Room 2', category: 'consultation', sortOrder: 2 },
+      { name: 'Consultation Room 3', category: 'consultation', sortOrder: 3 },
+      { name: 'Phlebotomy', category: 'laboratory', sortOrder: 1 },
+      { name: 'X-ray Room', category: 'imaging', sortOrder: 1 },
+      { name: 'Ultrasound Room', category: 'imaging', sortOrder: 2 },
+    ])
+    .returning({ id: rooms.id });
+
   console.log('Inserting admin user…');
   const adminEmail = (process.env.ADMIN_SEED_EMAIL ?? '').trim().toLowerCase();
   const adminPassword = process.env.ADMIN_SEED_PASSWORD ?? '';
@@ -357,6 +382,7 @@ async function main() {
   console.log(`  doctors:  ${doctorRows.length}`);
   console.log(`  services: ${serviceRows.length} (${CONSULTATIONS.length} consultation, ${LABORATORY.length} laboratory, ${IMAGING.length} imaging)`);
   console.log(`  sessions: ${sessionRows.length}`);
+  console.log(`  rooms:    ${roomRows.length}`);
   console.log(`  admin:    ${adminEmail}`);
 }
 

@@ -5,7 +5,7 @@ import { asc } from 'drizzle-orm';
 
 import { db } from '@/db';
 import { doctors } from '@/db/schema';
-import { requireStaff } from '@/lib/auth';
+import { requireDesk } from '@/lib/auth';
 
 import { deleteDoctor, saveDoctor } from '../crud-actions';
 import { DeleteZone, RowDialog } from '../row-dialog';
@@ -25,7 +25,7 @@ export default async function DoctorsAdminPage({
 }: {
   searchParams: Promise<{ done?: string; error?: string; edit?: string; new?: string }>;
 }) {
-  await requireStaff();
+  await requireDesk();
   const { done, error, edit, new: isNew } = await searchParams;
   const list = await db.select().from(doctors).orderBy(asc(doctors.sortOrder), asc(doctors.fullName));
   const editing = edit ? list.find((d) => d.id === edit) : undefined;

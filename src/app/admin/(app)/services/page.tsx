@@ -5,7 +5,7 @@ import { asc } from 'drizzle-orm';
 
 import { db } from '@/db';
 import { services } from '@/db/schema';
-import { requireStaff } from '@/lib/auth';
+import { requireDesk } from '@/lib/auth';
 import { formatPhp } from '@/lib/money';
 
 import { saveService } from '../crud-actions';
@@ -28,7 +28,7 @@ export default async function ServicesAdminPage({
 }: {
   searchParams: Promise<{ done?: string; error?: string; edit?: string; new?: string }>;
 }) {
-  await requireStaff();
+  await requireDesk();
   const { done, error, edit, new: isNew } = await searchParams;
   const list = await db.select().from(services).orderBy(asc(services.sortOrder), asc(services.name));
   const editing = edit ? list.find((s) => s.id === edit) : undefined;

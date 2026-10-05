@@ -3,12 +3,8 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import { useFormStatus } from 'react-dom';
 
-import { nextAutoCategory, type QueueCategory } from '@/lib/queue';
 import { formatManilaTime } from '@/lib/time';
-
-import { callNext, issueWalkIn, recall } from './actions';
 
 /**
  * The waiting-room board.
@@ -28,21 +24,21 @@ import { callNext, issueWalkIn, recall } from './actions';
 const REFRESH_MS = 15_000;
 const CLOCK_MS = 10_000;
 const VOICE_KEY = 'veritas-monitor-voice';
-const AUTO_KEY = 'veritas-monitor-auto';
-const AUTO_SECONDS_KEY = 'veritas-monitor-auto-seconds';
-const AUTO_CHOICES = [10, 30, 60, 120] as const;
-const AUTO_DEFAULT = 30;
 
 type Panel = {
   key: string;
   label: string;
-  /** A walk-in may have no name yet; the number is what the room is waiting for. */
-  serving: { ticket: string; name: string | null; detail: string | null } | null;
+  /**
+   * One per room with a number up, in room order. A walk-in may have no name yet; the
+   * number and the room are what the patient is waiting for.
+   */
+  serving: { ticket: string; name: string | null; room: string | null }[];
   waitingCount: number;
   next: { ticket: string; name: string | null }[];
 };
 
-type Announcement = { ticket: string; name: string | null; categoryLabel: string };
+/** `destination` is the room, or the category for a number called before rooms existed. */
+type Announcement = { ticket: string; name: string | null; destination: string };
 
 /**
  * Three categories, three colours already in the palette, so the board looks like the
@@ -98,44 +94,6 @@ function writeVoice(on: boolean) {
   for (const listener of voiceListeners) listener();
 }
 
-const autoListeners = new Set<() => void>();
-
-function subscribeAuto(onChange: () => void) {
-  autoListeners.add(onChange);
-  return () => {
-    autoListeners.delete(onChange);
-  };
-}
-
-function readAuto(): boolean {
-  try {
-    return window.localStorage.getItem(AUTO_KEY) === 'on';
-  } catch {
-    return false;
-  }
-}
-
-function readAutoSeconds(): number {
-  try {
-    const stored = Number(window.localStorage.getItem(AUTO_SECONDS_KEY));
-    return AUTO_CHOICES.includes(stored as (typeof AUTO_CHOICES)[number]) ? stored : AUTO_DEFAULT;
-  } catch {
-    return AUTO_DEFAULT;
-  }
-}
-
-function writeAuto(on: boolean, seconds?: number) {
-  try {
-    window.localStorage.setItem(AUTO_KEY, on ? 'on' : 'off');
-    if (seconds !== undefined) window.localStorage.setItem(AUTO_SECONDS_KEY, String(seconds));
-  } catch {
-    // Storage blocked. The toggle still works for this session.
-  }
-  for (const listener of autoListeners) listener();
-}
-
-const autoSecondsOnServer = () => AUTO_DEFAULT;
-
 const DIGIT_WORDS = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine'];
 
 /** "VRT-7K4Q" read out as letters and whole digits, not attempted as a word. */
@@ -162,7 +120,7 @@ export function MonitorBoard({
   initialTime: string;
   panels: Panel[];
   announcement: Announcement | null;
-  /** False on the wall screen (`?display=1`), which has nobody to press anything. */
+  /** False on the wall screen (`?display=1`), which hides the screen settings too. */
   showControls: boolean;
 }) {
   const router = useRouter();
@@ -171,8 +129,6 @@ export function MonitorBoard({
   const inClient = useSyncExternalStore(neverChanges, inBrowser, onServer);
   const voice = useSyncExternalStore(subscribeVoice, readVoice, onServer);
   const canSpeak = inClient && 'speechSynthesis' in window;
-  const auto = useSyncExternalStore(subscribeAuto, readAuto, onServer);
-  const autoSeconds = useSyncExternalStore(subscribeAuto, readAutoSeconds, autoSecondsOnServer);
 
   // Pull fresh data rather than reloading the document, so the board never blinks white
   // in front of the room. The <noscript> meta refresh below covers the other case.
@@ -191,14 +147,19 @@ export function MonitorBoard({
   const previous = useRef<Record<string, string | null> | null>(null);
   useEffect(() => {
     const current: Record<string, string | null> = {};
-    for (const panel of panels) current[panel.key] = panel.serving?.ticket ?? null;
+    for (const panel of panels) {
+      current[panel.key] = panel.serving.map((s) => s.ticket).join(' ') || null;
+    }
 
     const before = previous.current;
     previous.current = current;
     if (!before) return;
 
     const changed = Object.keys(current).filter(
-      (key) => current[key] && current[key] !== before[key],
+      // Flash when a number appeared that was not up before, not when one merely left.
+      (key) =>
+        current[key] &&
+        current[key]!.split(' ').some((ticket) => !(before[key] ?? '').split(' ').includes(ticket)),
     );
     if (changed.length === 0) return;
 
@@ -226,7 +187,7 @@ export function MonitorBoard({
 
     try {
       const utterance = new SpeechSynthesisUtterance(
-        `Reference ${speakableCode(code)}. Please proceed to ${announcement!.categoryLabel}.`,
+        `Number ${speakableCode(code)}. Please proceed to ${announcement!.destination}.`,
       );
       utterance.rate = 0.85;
       window.speechSynthesis.cancel();
@@ -236,74 +197,10 @@ export function MonitorBoard({
     }
   }, [announcement, voice, canSpeak]);
 
-  /*
-   * Auto mode.
-   *
-   * Off by default, and deliberately not on the wall screen: `showControls` is false
-   * there, and two screens both advancing the same queue on their own timers would
-   * double-call every patient.
-   *
-   * It rotates one category per tick rather than advancing all three at once, so a
-   * single number changes at a time. When nobody is waiting anywhere the timer is not
-   * armed at all, so an empty clinic is quiet rather than firing into the void.
-   */
-  const autoPrevious = useRef<QueueCategory | null>(null);
-  const autoBusy = useRef(false);
-  const anyoneWaiting = panels.some((panel) => panel.waitingCount > 0);
-
-  /*
-   * The timer reads the panels through a ref rather than taking them as a dependency.
-   *
-   * `panels` is a fresh array on every server render, and the board pulls a fresh render
-   * every 15 seconds, so depending on it tore the interval down and re-armed it four
-   * times a minute. The timer then fired on whatever was left of 15 seconds instead of
-   * the chosen gap — and at the default of 30 seconds it never fired at all, because it
-   * was reset before it ever got there. `anyoneWaiting` is a boolean for the same
-   * reason: it changes when the clinic empties, not on every refresh.
-   */
-  const latestPanels = useRef(panels);
-  useEffect(() => {
-    latestPanels.current = panels;
-  });
-
-  useEffect(() => {
-    if (!auto || !showControls || !anyoneWaiting) return;
-
-    const id = setInterval(() => {
-      // A slow round trip must not stack up calls and empty the queue in one go.
-      if (autoBusy.current) return;
-
-      const target = nextAutoCategory(
-        latestPanels.current.map((panel) => ({
-          key: panel.key as QueueCategory,
-          waitingCount: panel.waitingCount,
-        })),
-        autoPrevious.current,
-      );
-      if (!target) return;
-
-      autoBusy.current = true;
-      autoPrevious.current = target;
-
-      const body = new FormData();
-      body.set('category', target);
-      void callNext(body).finally(() => {
-        autoBusy.current = false;
-      });
-    }, autoSeconds * 1000);
-
-    return () => clearInterval(id);
-  }, [auto, autoSeconds, showControls, anyoneWaiting]);
-
   function toggleVoice() {
     const next = !voice;
     writeVoice(next);
     if (!next && canSpeak) window.speechSynthesis.cancel();
-  }
-
-  function toggleAuto() {
-    autoPrevious.current = null;
-    writeAuto(!auto);
   }
 
   return (
@@ -353,25 +250,35 @@ export function MonitorBoard({
                 {/* Fixed padding, not flex-1: this is what keeps the rule below at the
                     same height in all three panels. */}
                 <div className="py-[clamp(1rem,3.2vw,2.75rem)]">
-                  {panel.serving ? (
-                    <>
-                      <p
-                        className={`font-mono text-[clamp(1.75rem,5.5vw,6rem)] leading-none font-semibold tracking-tight tabular-nums transition-opacity duration-200 ${
-                          isFlashing ? 'opacity-25' : 'opacity-100'
-                        }`}
-                      >
-                        {panel.serving.ticket}
-                      </p>
-                      <p className="mt-2 min-h-[1.5em] text-[clamp(0.875rem,1.6vw,1.25rem)] text-ink-700">
-                        {panel.serving.name}
-                        {panel.serving.detail && (
-                          <span className="text-ink-500">
-                            {panel.serving.name ? ' · ' : ''}
-                            {panel.serving.detail}
-                          </span>
-                        )}
-                      </p>
-                    </>
+                  {panel.serving.length > 0 ? (
+                    <ul className="space-y-[clamp(0.75rem,1.6vw,1.25rem)]">
+                      {panel.serving.map((entry) => (
+                        <li key={entry.ticket}>
+                          <p
+                            className={`font-mono leading-none font-semibold tracking-tight tabular-nums transition-opacity duration-200 ${
+                              // One room keeps the full-size number; two or more share
+                              // the panel, so the panels stay the same height.
+                              panel.serving.length === 1
+                                ? 'text-[clamp(1.75rem,5.5vw,6rem)]'
+                                : 'text-[clamp(1.5rem,3.4vw,3.5rem)]'
+                            } ${isFlashing ? 'opacity-25' : 'opacity-100'}`}
+                          >
+                            {entry.ticket}
+                          </p>
+                          <p className="mt-1.5 text-[clamp(0.875rem,1.6vw,1.25rem)] text-ink-700">
+                            {entry.room ? (
+                              <span className="font-semibold text-ink-900">{entry.room}</span>
+                            ) : null}
+                            {entry.name && (
+                              <span className="text-ink-500">
+                                {entry.room ? ' · ' : ''}
+                                {entry.name}
+                              </span>
+                            )}
+                          </p>
+                        </li>
+                      ))}
+                    </ul>
                   ) : (
                     <>
                       <p className="font-mono text-[clamp(1.75rem,5.5vw,6rem)] leading-none font-semibold text-line-strong">
@@ -433,60 +340,28 @@ export function MonitorBoard({
             </span>
             {' — '}
             {announcement.name ? `${announcement.name}, ` : ''}please proceed to{' '}
-            {announcement.categoryLabel}.
+            <span className="font-semibold text-white">{announcement.destination}</span>.
           </span>
         ) : (
           <span>
-            Please wait for your reference code to appear. It is on your booking confirmation.
+            Please wait for your number to appear. Reception gave it to you when you arrived.
           </span>
         )}
       </p>
 
       {showControls && (
         <section
-          aria-label="Reception controls"
+          aria-label="Screen settings"
           className="mt-[clamp(0.625rem,1.2vw,1rem)] border-t border-brand-700 pt-[clamp(0.625rem,1.2vw,1rem)]"
         >
           <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
             <h2 className="text-xs font-semibold tracking-[0.14em] text-brand-300 uppercase">
-              Reception controls
+              Screen settings
             </h2>
 
-            {/* Screen settings, kept away from the buttons that move the queue: pressing
-                one of these changes what this screen does, never who is called next. */}
+            {/* These change what this screen does, never who is called next. Calling is
+                done from each room's own screen, so the board can say which room. */}
             <div className="flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                onClick={toggleAuto}
-                aria-pressed={auto}
-                className={`min-h-9 rounded border px-3 py-1.5 text-xs font-medium ${
-                  auto
-                    ? 'border-brand-400 bg-brand-600 text-white'
-                    : 'border-brand-400 text-brand-100 hover:bg-brand-800'
-                }`}
-              >
-                Auto call: {auto ? 'on' : 'off'}
-              </button>
-
-              {/* The interval only appears once auto is on. A dropdown that governs a
-                  switched-off feature is a question the desk cannot answer. */}
-              {auto && (
-                <label className="flex items-center gap-1.5 text-xs">
-                  <span className="sr-only">Seconds between automatic calls</span>
-                  <select
-                    value={autoSeconds}
-                    onChange={(event) => writeAuto(auto, Number(event.target.value))}
-                    className="min-h-9 rounded border border-brand-400 bg-brand-800 px-2 py-1.5 text-xs text-brand-100"
-                  >
-                    {AUTO_CHOICES.map((seconds) => (
-                      <option key={seconds} value={seconds}>
-                        every {seconds}s
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              )}
-
               {canSpeak && (
                 <button
                   type="button"
@@ -524,32 +399,13 @@ export function MonitorBoard({
             </div>
           </div>
 
-          {/*
-           * One block per category, in the same order and colour as the panels above.
-           *
-           * The previous version was grouped the other way round — a row of call buttons,
-           * a row of walk-in buttons, a row of undo links — which put the word
-           * "Consultation" on three buttons that did three different things, told apart
-           * only by a small caption at the left of each row that moved away on wrap.
-           */}
-          <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-3">
-            {panels.map((panel) => (
-              <CategoryControls
-                key={panel.key}
-                panel={panel}
-                accent={ACCENT[panel.key] ?? ACCENT.imaging}
-              />
-            ))}
-          </div>
-
           <p className="mt-3 text-xs text-brand-300">
-            {auto && (
-              <span className="text-brand-100">
-                Auto call is on: the next number goes up every {autoSeconds} seconds, one
-                category at a time. Turn it off to call patients yourself.{' '}
-              </span>
-            )}
-            Numbers are handed out at reception when a patient is marked Arrived on Today.
+            Numbers are handed out at reception when a patient is marked Arrived or a
+            walk-in is added on Today, and called from each room’s{' '}
+            <Link href="/admin/station" className="text-brand-100 underline underline-offset-4">
+              My room
+            </Link>{' '}
+            screen.
           </p>
         </section>
       )}
@@ -561,162 +417,6 @@ export function MonitorBoard({
        */}
       <noscript dangerouslySetInnerHTML={{ __html: '<meta http-equiv="refresh" content="30">' }} />
     </div>
-  );
-}
-
-/**
- * Everything the desk can do to one category, in one place.
- *
- * The three actions sit under a heading carrying that category's name and accent, so the
- * block reads as "Consultation: call, walk-in, undo" rather than as three anonymous
- * buttons that happen to share a row with two other categories' buttons.
- *
- * All three are plain form posts, so they still work with JavaScript off.
- */
-function CategoryControls({
-  panel,
-  accent,
-}: {
-  panel: Panel;
-  accent: { text: string; bar: string; dot: string };
-}) {
-  const upNext = panel.next[0]?.ticket ?? null;
-  const serving = panel.serving?.ticket ?? null;
-
-  return (
-    <div className="rounded-lg border border-brand-700 bg-brand-800 p-3">
-      <div className="flex items-baseline justify-between gap-2">
-        <h3 className="flex items-center gap-2 text-xs font-semibold tracking-[0.14em] text-brand-100 uppercase">
-          <span className={`inline-block h-1.5 w-1.5 rounded-full ${accent.dot}`} aria-hidden />
-          {panel.label}
-        </h3>
-        <p className="text-xs text-brand-300 tabular-nums">
-          {panel.waitingCount} waiting
-          {serving && <span className="ml-2">on screen {serving}</span>}
-        </p>
-      </div>
-
-      <form action={callNext} className="mt-2.5">
-        <input type="hidden" name="category" value={panel.key} />
-        <CallButton label={panel.label} waitingCount={panel.waitingCount} upNext={upNext} />
-      </form>
-
-      <div className="mt-2 flex gap-2">
-        <form action={issueWalkIn} className="flex-1">
-          <input type="hidden" name="category" value={panel.key} />
-          <WalkInButton label={panel.label} />
-        </form>
-        <form action={recall} className="flex-1">
-          <input type="hidden" name="category" value={panel.key} />
-          <UndoButton label={panel.label} serving={serving} />
-        </form>
-      </div>
-    </div>
-  );
-}
-
-/*
- * The three buttons below each read useFormStatus, which is why they are components
- * rather than markup inside CategoryControls: the hook reports on the nearest enclosing
- * form, and only from inside it.
- *
- * Disabling while the post is in flight is the point. Without it a second tap on a slow
- * connection calls a second patient, and the room sees a number that nobody in it was
- * ready for.
- */
-
-const SECONDARY =
-  'min-h-9 w-full rounded border border-brand-400 px-2 py-1.5 text-xs font-medium text-brand-100 hover:bg-brand-700 disabled:cursor-not-allowed disabled:border-brand-700 disabled:text-brand-300/50 disabled:hover:bg-transparent';
-
-/**
- * Named with the number it is about to call, so the desk can see what will land on the
- * wall before pressing, and an empty queue says so instead of offering a dead button
- * with no explanation.
- */
-function CallButton({
-  label,
-  waitingCount,
-  upNext,
-}: {
-  label: string;
-  waitingCount: number;
-  upNext: string | null;
-}) {
-  const { pending } = useFormStatus();
-  const empty = waitingCount === 0;
-
-  return (
-    <button
-      type="submit"
-      disabled={empty || pending}
-      // The accessible name contains the visible text, so somebody driving the screen by
-      // voice can say what they can read.
-      aria-label={
-        empty
-          ? `No one waiting for ${label}`
-          : `Call ${upNext ?? 'next'}, the next ${label} number, ${waitingCount} waiting`
-      }
-      className="inline-flex min-h-11 w-full items-center justify-center gap-1.5 rounded border border-brand-400 bg-brand-600 px-3 py-2 text-sm font-semibold text-white hover:bg-brand-500 disabled:cursor-not-allowed disabled:border-brand-700 disabled:bg-transparent disabled:text-brand-300"
-    >
-      {pending ? (
-        'Calling…'
-      ) : empty ? (
-        'No one waiting'
-      ) : upNext ? (
-        <>
-          Call <span className="font-mono tabular-nums">{upNext}</span>
-        </>
-      ) : (
-        'Call next'
-      )}
-    </button>
-  );
-}
-
-/** A patient at the desk with no appointment still needs a place in the queue. */
-function WalkInButton({ label }: { label: string }) {
-  const { pending } = useFormStatus();
-
-  return (
-    <button
-      type="submit"
-      disabled={pending}
-      aria-label={`Walk-in: issue a new ${label} number for somebody at the desk`}
-      className={SECONDARY}
-    >
-      {pending ? 'Adding…' : '+ Walk-in'}
-    </button>
-  );
-}
-
-/**
- * Undo names the number it will take back off the wall. "Undo" on its own is the kind of
- * button somebody presses to find out what it does.
- */
-function UndoButton({ label, serving }: { label: string; serving: string | null }) {
-  const { pending } = useFormStatus();
-
-  return (
-    <button
-      type="submit"
-      disabled={!serving || pending}
-      aria-label={
-        serving
-          ? `Undo ${serving}: put it back at the front of the ${label} queue`
-          : `Nothing to undo for ${label}`
-      }
-      className={SECONDARY}
-    >
-      {pending ? (
-        'Undoing…'
-      ) : serving ? (
-        <>
-          Undo <span className="font-mono tabular-nums">{serving}</span>
-        </>
-      ) : (
-        'Undo'
-      )}
-    </button>
   );
 }
 

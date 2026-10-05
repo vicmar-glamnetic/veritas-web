@@ -45,9 +45,8 @@ const previous = await pool.query(
 );
 
 /*
- * Walk-in numbers pressed on the board during a demo or a test run. They have no
- * booking and no patient behind them, which is the one thing only the demo walk-in
- * button produces — a genuine walk-in gets a name taken at the desk.
+ * Bare walk-in numbers, with no booking and no patient behind them. The desk's walk-in
+ * form always takes a name, so only a demo or a test run leaves these.
  */
 await pool.query(
   `delete from queue_tickets
@@ -224,16 +223,31 @@ for (const [c, group] of CATEGORIES.entries()) {
       [today, group.category],
     );
 
+    // A consultation goes into its booked doctor's line, as Arrived does it.
     await pool.query(
-      `insert into queue_tickets (service_date, category, number, booking_id, patient_id)
-       select $1, $2, $3, b.id, b.patient_id from bookings b where b.reference_code = $4`,
+      `insert into queue_tickets (service_date, category, number, booking_id, patient_id, doctor_id)
+       select $1, $2, $3, b.id, b.patient_id,
+              case when $2::service_category = 'consultation' then b.doctor_id end
+         from bookings b where b.reference_code = $4`,
       [today, group.category, rows[0].last_number, reference],
     );
   }
 
-  // The first of them is on the board; the second is next up.
+  /*
+   * The first of them is on the board, called to the first room of that kind with nobody
+   * in it; the second is next up. A room already showing somebody is left alone rather
+   * than cleared, because on a real database that somebody is a real patient.
+   */
   await pool.query(
-    `update queue_tickets set status = 'called', called_at = now()
+    `update queue_tickets set status = 'called', called_at = now(),
+            room_id = (
+              select r.id from rooms r
+               where r.category = $2 and r.is_active
+                 and not exists (
+                   select 1 from queue_tickets q where q.room_id = r.id and q.status = 'called'
+                 )
+               order by r.sort_order, r.name limit 1
+            )
       where service_date = $1 and category = $2 and number = (
         select min(number) from queue_tickets where service_date = $1 and category = $2
       )`,

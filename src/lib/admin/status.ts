@@ -45,6 +45,7 @@ export async function changeBookingStatus(
       .select({
         status: bookings.status,
         patientId: bookings.patientId,
+        doctorId: bookings.doctorId,
         scheduledStart: bookings.scheduledStart,
         category: services.category,
       })
@@ -91,6 +92,7 @@ export async function changeBookingStatus(
         patientId: current.patientId,
         serviceDate: manilaDateString(current.scheduledStart),
         category: current.category as QueueCategory,
+        doctorId: current.doctorId,
         staffId: staff.id,
       });
       ticket = formatTicket(issued.category, issued.number);

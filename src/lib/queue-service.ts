@@ -1,9 +1,18 @@
-import { and, asc, eq, sql } from 'drizzle-orm';
+import { and, asc, eq, isNull, lt, or, sql } from 'drizzle-orm';
 import type { PgTransaction } from 'drizzle-orm/pg-core';
 
 import type { Db } from '@/db/client';
-import { bookings, doctors, patients, queueCounters, queueTickets } from '@/db/schema';
+import {
+  bookings,
+  doctors,
+  patients,
+  queueCounters,
+  queueTickets,
+  rooms,
+  services,
+} from '@/db/schema';
 
+import { isUniqueViolation } from './booking';
 import type { QueueCategory, QueueTicketRow } from './queue';
 
 /*
@@ -56,6 +65,8 @@ export async function issueTicketForBooking(
     patientId: string;
     serviceDate: string;
     category: QueueCategory;
+    /** The booked doctor, which puts a consultation in that doctor's line. */
+    doctorId: string | null;
     staffId: string;
   },
 ): Promise<IssuedTicket> {
@@ -77,6 +88,7 @@ export async function issueTicketForBooking(
       number,
       bookingId: input.bookingId,
       patientId: input.patientId,
+      doctorId: input.category === 'consultation' ? input.doctorId : null,
       issuedByStaffUserId: input.staffId,
     })
     .returning({ id: queueTickets.id, category: queueTickets.category, number: queueTickets.number });
@@ -84,19 +96,54 @@ export async function issueTicketForBooking(
   return ticket as IssuedTicket;
 }
 
-/** A walk-in: a place in the queue with no appointment behind it. */
-export async function issueWalkInTicket(
-  db: Db,
-  staffId: string | null,
-  serviceDate: string,
-  category: QueueCategory,
-): Promise<IssuedTicket> {
+export type WalkInInput = {
+  staffId: string | null;
+  serviceDate: string;
+  category: QueueCategory;
+  /** A consultation walk-in's doctor, or null for whichever doctor is free first. */
+  doctorId?: string | null;
+  /**
+   * Who they are. Reception takes a name and a mobile, which becomes a `walkin` patient
+   * record, so the clinic knows afterwards who held the number. Left out, the number is
+   * issued bare — kept for the moment somebody needs a place before they can give a name.
+   */
+  patient?: { fullName: string; mobile: string } | null;
+};
+
+/**
+ * A walk-in: a place in the queue with no appointment behind it.
+ *
+ * Nothing is invented in `bookings`. The ticket and, when a name was given, the patient
+ * row are the whole record; `patients.merged_into_id` is there for the day the clinic
+ * system reconciles a walk-in with the same person's online bookings.
+ */
+export async function issueWalkInTicket(db: Db, input: WalkInInput): Promise<IssuedTicket> {
   return db.transaction(async (tx) => {
-    const number = await nextNumber(tx, serviceDate, category);
+    let patientId: string | null = null;
+    if (input.patient) {
+      const [created] = await tx
+        .insert(patients)
+        .values({
+          fullName: input.patient.fullName,
+          mobile: input.patient.mobile,
+          source: 'walkin',
+        })
+        .returning({ id: patients.id });
+      patientId = created.id;
+    }
+
+    const number = await nextNumber(tx, input.serviceDate, input.category);
 
     const [ticket] = await tx
       .insert(queueTickets)
-      .values({ serviceDate, category, number, issuedByStaffUserId: staffId })
+      .values({
+        serviceDate: input.serviceDate,
+        category: input.category,
+        number,
+        patientId,
+        doctorId: input.category === 'consultation' ? (input.doctorId ?? null) : null,
+        issuedByStaffUserId: input.staffId,
+      })
       .returning({
         id: queueTickets.id,
         category: queueTickets.category,
@@ -107,83 +154,224 @@ export async function issueWalkInTicket(
   });
 }
 
+/* -------------------------------------------------------------------------- */
+/* A room working its line                                                    */
+/* -------------------------------------------------------------------------- */
+
+export type Station = {
+  serviceDate: string;
+  roomId: string;
+  /** Whose consultation line this room calls from. Ignored for laboratory and imaging. */
+  doctorId: string | null;
+  staffId: string | null;
+};
+
+export type CallResult =
+  | { ok: true; ticket: IssuedTicket }
+  | { ok: false; reason: 'nobody_waiting' | 'room_busy' | 'no_room' | 'no_doctor' };
+
 /**
- * Put the next waiting number on the board.
- *
- * Whoever is currently called is finished first, so at most one ticket per category is
- * ever `called` and the board cannot show two numbers at once.
- *
- * The row is taken with FOR UPDATE and the status is re-checked in the UPDATE's WHERE
- * clause, the same way booking status changes work: two people pressing Call next at the
- * same moment must not hand the same number to two rooms.
+ * The WHERE clause for one line: this category, and for consultation, this doctor's
+ * patients plus the walk-ins waiting for whoever is free first. Mirrors `isInLine`.
  */
-export async function callNextTicket(
-  db: Db,
-  staffId: string | null,
-  serviceDate: string,
-  category: QueueCategory,
-): Promise<IssuedTicket | null> {
-  return db.transaction(async (tx) => {
-    const now = new Date();
-
-    await tx
-      .update(queueTickets)
-      .set({ status: 'done', endedAt: now })
-      .where(
-        and(
-          eq(queueTickets.serviceDate, serviceDate),
-          eq(queueTickets.category, category),
-          eq(queueTickets.status, 'called'),
-        ),
-      );
-
-    const [next] = await tx
-      .select({
-        id: queueTickets.id,
-        category: queueTickets.category,
-        number: queueTickets.number,
-      })
-      .from(queueTickets)
-      .where(
-        and(
-          eq(queueTickets.serviceDate, serviceDate),
-          eq(queueTickets.category, category),
-          eq(queueTickets.status, 'waiting'),
-        ),
-      )
-      .orderBy(asc(queueTickets.number))
-      .limit(1)
-      .for('update');
-
-    if (!next) return null;
-
-    const claimed = await tx
-      .update(queueTickets)
-      .set({ status: 'called', calledAt: now, calledByStaffUserId: staffId })
-      .where(and(eq(queueTickets.id, next.id), eq(queueTickets.status, 'waiting')))
-      .returning({ id: queueTickets.id });
-
-    return claimed.length ? (next as IssuedTicket) : null;
-  });
+function lineFilter(category: QueueCategory, doctorId: string | null) {
+  if (category !== 'consultation') return eq(queueTickets.category, category);
+  return and(
+    eq(queueTickets.category, category),
+    or(eq(queueTickets.doctorId, doctorId!), isNull(queueTickets.doctorId)),
+  );
 }
 
-/** Send the number on the board back to waiting, for a mis-tap. */
-export async function recallTicket(
-  db: Db,
-  serviceDate: string,
-  category: QueueCategory,
-): Promise<void> {
-  await db
+/**
+ * Call the next patient in this room's line.
+ *
+ * Refused while the room still has somebody on the board: they are finished, skipped
+ * or undone first, so a patient never drops off the board without staff saying what
+ * happened to them. The old Call next quietly marked whoever was showing as seen.
+ *
+ * The next ticket is taken with FOR UPDATE SKIP LOCKED. Two laboratory rooms share one
+ * line; when both press Call at the same moment the second simply takes the next patient
+ * rather than queueing behind the first room's transaction. Correctness does not rest on
+ * the SKIP — plain FOR UPDATE re-checks a row after waiting and moves on — but nobody at
+ * a desk should wait on somebody else's tap. The status is re-checked in the UPDATE as
+ * everywhere else, and the partial unique index on a room's called ticket stops one room
+ * ending up with two numbers on the board.
+ */
+export async function callNextForRoom(db: Db, station: Station): Promise<CallResult> {
+  try {
+    return await db.transaction(async (tx): Promise<CallResult> => {
+      const [room] = await tx
+        .select({ category: rooms.category, isActive: rooms.isActive })
+        .from(rooms)
+        .where(eq(rooms.id, station.roomId))
+        .limit(1);
+
+      if (!room || !room.isActive) return { ok: false, reason: 'no_room' };
+      const category = room.category as QueueCategory;
+      if (category === 'consultation' && !station.doctorId) return { ok: false, reason: 'no_doctor' };
+
+      // A number left on the board when the clinic closed last night belongs to a day
+      // that is over. Close it, or the room would refuse every call the next morning
+      // while its own screen, which only shows today, says it is free.
+      await tx
+        .update(queueTickets)
+        .set({ status: 'done', endedAt: new Date() })
+        .where(
+          and(
+            eq(queueTickets.roomId, station.roomId),
+            eq(queueTickets.status, 'called'),
+            lt(queueTickets.serviceDate, station.serviceDate),
+          ),
+        );
+
+      const [busy] = await tx
+        .select({ id: queueTickets.id })
+        .from(queueTickets)
+        .where(and(eq(queueTickets.roomId, station.roomId), eq(queueTickets.status, 'called')))
+        .limit(1);
+      if (busy) return { ok: false, reason: 'room_busy' };
+
+      const [next] = await tx
+        .select({ id: queueTickets.id, category: queueTickets.category, number: queueTickets.number })
+        .from(queueTickets)
+        .where(
+          and(
+            eq(queueTickets.serviceDate, station.serviceDate),
+            eq(queueTickets.status, 'waiting'),
+            lineFilter(category, station.doctorId),
+          ),
+        )
+        // Recalled patients first, in the order they came back; then issue order.
+        // compareInLine in queue.ts is the same rule, pinned by unit tests.
+        .orderBy(sql`${queueTickets.recalledAt} asc nulls last`, asc(queueTickets.number))
+        .limit(1)
+        .for('update', { skipLocked: true });
+
+      if (!next) return { ok: false, reason: 'nobody_waiting' };
+
+      const claimed = await tx
+        .update(queueTickets)
+        .set({
+          status: 'called',
+          roomId: station.roomId,
+          calledAt: new Date(),
+          calledByStaffUserId: station.staffId,
+          // A first-available walk-in now belongs to the doctor who called them.
+          ...(category === 'consultation' ? { doctorId: station.doctorId } : {}),
+        })
+        .where(and(eq(queueTickets.id, next.id), eq(queueTickets.status, 'waiting')))
+        .returning({ id: queueTickets.id });
+
+      return claimed.length
+        ? { ok: true, ticket: next as IssuedTicket }
+        : { ok: false, reason: 'nobody_waiting' };
+    });
+  } catch (error) {
+    // Somebody else in the same room pressed Call in the same instant and won.
+    if (isUniqueViolation(error, 'queue_tickets_room_called_key')) {
+      return { ok: false, reason: 'room_busy' };
+    }
+    throw error;
+  }
+}
+
+/** The patient came in. Waiting time ends and service time begins here. */
+export async function startTicket(db: Db, roomId: string): Promise<boolean> {
+  const rows = await db
     .update(queueTickets)
-    .set({ status: 'waiting', calledAt: null })
+    .set({ startedAt: new Date() })
     .where(
       and(
-        eq(queueTickets.serviceDate, serviceDate),
-        eq(queueTickets.category, category),
+        eq(queueTickets.roomId, roomId),
         eq(queueTickets.status, 'called'),
+        isNull(queueTickets.startedAt),
       ),
-    );
+    )
+    .returning({ id: queueTickets.id });
+  return rows.length > 0;
 }
+
+/** Seen. The number leaves the board and the room is free to call again. */
+export async function finishTicket(db: Db, roomId: string): Promise<boolean> {
+  const rows = await db
+    .update(queueTickets)
+    .set({ status: 'done', endedAt: new Date() })
+    .where(and(eq(queueTickets.roomId, roomId), eq(queueTickets.status, 'called')))
+    .returning({ id: queueTickets.id });
+  return rows.length > 0;
+}
+
+/**
+ * Called, and nobody came. Only before Start: someone who is already in the room has, by
+ * definition, turned up.
+ */
+export async function skipTicket(db: Db, roomId: string): Promise<boolean> {
+  const rows = await db
+    .update(queueTickets)
+    .set({ status: 'skipped', endedAt: new Date() })
+    .where(
+      and(
+        eq(queueTickets.roomId, roomId),
+        eq(queueTickets.status, 'called'),
+        isNull(queueTickets.startedAt),
+      ),
+    )
+    .returning({ id: queueTickets.id });
+  return rows.length > 0;
+}
+
+/**
+ * Undo a mis-tap: the number goes back to waiting, in its old place. Only before Start,
+ * for the same reason as skip. A first-available walk-in stays with the doctor who
+ * called them, which is harmless: they were at the front of that line anyway.
+ */
+export async function undoCall(db: Db, roomId: string): Promise<boolean> {
+  const rows = await db
+    .update(queueTickets)
+    .set({ status: 'waiting', calledAt: null, roomId: null, calledByStaffUserId: null })
+    .where(
+      and(
+        eq(queueTickets.roomId, roomId),
+        eq(queueTickets.status, 'called'),
+        isNull(queueTickets.startedAt),
+      ),
+    )
+    .returning({ id: queueTickets.id });
+  return rows.length > 0;
+}
+
+/**
+ * A skipped patient came back: to the front of their line, once.
+ *
+ * The once-only rule is in the WHERE clause, `recalled_at is null`, not in a check
+ * beforehand, so two people pressing Recall cannot both succeed and a second no-show
+ * cannot be recalled at all. They need a new number from reception.
+ */
+export async function recallSkipped(db: Db, ticketId: string): Promise<boolean> {
+  const rows = await db
+    .update(queueTickets)
+    .set({
+      status: 'waiting',
+      recalledAt: new Date(),
+      calledAt: null,
+      endedAt: null,
+      roomId: null,
+      calledByStaffUserId: null,
+    })
+    .where(
+      and(
+        eq(queueTickets.id, ticketId),
+        eq(queueTickets.status, 'skipped'),
+        isNull(queueTickets.recalledAt),
+      ),
+    )
+    .returning({ id: queueTickets.id });
+  return rows.length > 0;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Reading                                                                    */
+/* -------------------------------------------------------------------------- */
 
 /**
  * Everything the board shows for one clinic day.
@@ -200,17 +388,85 @@ export async function getQueueTickets(db: Db, serviceDate: string): Promise<Queu
       number: queueTickets.number,
       status: queueTickets.status,
       patientName: patients.fullName,
+      doctorId: queueTickets.doctorId,
       doctorName: doctors.fullName,
+      roomName: rooms.name,
       calledAt: queueTickets.calledAt,
+      recalledAt: queueTickets.recalledAt,
     })
     .from(queueTickets)
     .leftJoin(patients, eq(patients.id, queueTickets.patientId))
-    // The doctor reaches the ticket through its booking; a walk-in has neither, and the
-    // left joins let both fall through as null rather than dropping the row.
-    .leftJoin(bookings, eq(bookings.id, queueTickets.bookingId))
-    .leftJoin(doctors, eq(doctors.id, bookings.doctorId))
+    .leftJoin(doctors, eq(doctors.id, queueTickets.doctorId))
+    .leftJoin(rooms, eq(rooms.id, queueTickets.roomId))
     .where(eq(queueTickets.serviceDate, serviceDate))
     .orderBy(asc(queueTickets.number));
 
   return rows as QueueTicketRow[];
+}
+
+export type StationTicket = {
+  id: string;
+  category: QueueCategory;
+  number: number;
+  status: 'waiting' | 'called' | 'done' | 'skipped';
+  /** Full name: this is a staff screen in a room, not the wall. */
+  patientName: string | null;
+  /** What they booked, if they booked. Walk-ins have none. */
+  serviceName: string | null;
+  isWalkIn: boolean;
+  /** Null for a first-available walk-in still waiting. */
+  doctorId: string | null;
+  roomId: string | null;
+  roomName: string | null;
+  calledAt: Date | null;
+  startedAt: Date | null;
+  recalledAt: Date | null;
+};
+
+/**
+ * One line for a station screen: who is waiting, who was skipped, and who is in which
+ * room. Staff-only, so it carries the full name and the booked service, which the doctor
+ * needs and the wall must never get.
+ */
+export async function getLineTickets(
+  db: Db,
+  serviceDate: string,
+  category: QueueCategory,
+  doctorId: string | null,
+): Promise<StationTicket[]> {
+  const rows = await db
+    .select({
+      id: queueTickets.id,
+      category: queueTickets.category,
+      number: queueTickets.number,
+      status: queueTickets.status,
+      patientName: patients.fullName,
+      serviceName: services.name,
+      bookingId: queueTickets.bookingId,
+      doctorId: queueTickets.doctorId,
+      roomId: queueTickets.roomId,
+      roomName: rooms.name,
+      calledAt: queueTickets.calledAt,
+      startedAt: queueTickets.startedAt,
+      recalledAt: queueTickets.recalledAt,
+    })
+    .from(queueTickets)
+    .leftJoin(patients, eq(patients.id, queueTickets.patientId))
+    .leftJoin(bookings, eq(bookings.id, queueTickets.bookingId))
+    .leftJoin(services, eq(services.id, bookings.serviceId))
+    .leftJoin(rooms, eq(rooms.id, queueTickets.roomId))
+    .where(
+      and(
+        eq(queueTickets.serviceDate, serviceDate),
+        category === 'consultation' && !doctorId
+          ? eq(queueTickets.category, category)
+          : lineFilter(category, doctorId),
+      ),
+    )
+    .orderBy(asc(queueTickets.number));
+
+  return rows.map(({ bookingId, ...row }) => ({
+    ...row,
+    isWalkIn: bookingId === null,
+  })) as StationTicket[];
 }

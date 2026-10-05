@@ -1,5 +1,6 @@
 import Link from 'next/link';
 
+import { isDeskRole, ROLE_LABEL } from '@/lib/admin/roles';
 import { requireStaff } from '@/lib/auth';
 import { getSiteSettings } from '@/lib/queries';
 
@@ -21,7 +22,10 @@ export default async function AdminAppLayout({ children }: { children: React.Rea
       <header className="border-b border-line bg-surface">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-3">
           <div className="flex items-baseline gap-3">
-            <Link href="/admin" className="font-serif text-lg text-ink-900">
+            <Link
+              href={isDeskRole(staff.role) ? '/admin' : '/admin/station'}
+              className="font-serif text-lg text-ink-900"
+            >
               {settings.clinicName}
             </Link>
             <span className="text-xs font-semibold tracking-[0.16em] text-brand-600 uppercase">
@@ -33,7 +37,7 @@ export default async function AdminAppLayout({ children }: { children: React.Rea
             <span className="text-ink-500">
               {staff.name}
               <span className="ml-2 rounded-full bg-surface-sunken px-2 py-0.5 text-xs font-semibold text-ink-700">
-                {staff.role === 'admin' ? 'Admin' : 'Reception'}
+                {ROLE_LABEL[staff.role]}
               </span>
             </span>
             <Link href="/" className="text-ink-500 underline underline-offset-4 hover:text-ink-900">

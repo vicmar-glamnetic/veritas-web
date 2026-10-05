@@ -14,7 +14,9 @@ import { MonitorBoard } from './board';
  * touches a Date, a timezone or the database. The page is always fresh: a board that
  * served a cached answer would call a patient who was seen twenty minutes ago.
  *
- * `?display=1` hides the staff controls, for the screen that actually hangs on the wall.
+ * Nobody calls patients from here any more: each room calls its own line from My room,
+ * which is what lets the board say which room to go to. `?display=1` also hides the
+ * screen settings, for the screen that actually hangs on the wall.
  */
 export const dynamic = 'force-dynamic';
 
@@ -31,14 +33,13 @@ export default async function MonitorPage({
   const panels = board.panels.map((panel) => ({
     key: panel.key,
     label: panel.label,
-    serving: panel.serving
-      ? {
-          ticket: formatTicket(panel.serving.category, panel.serving.number),
-          // A walk-in may have no name yet, and the number is the point regardless.
-          name: panel.serving.patientName ? shortenName(panel.serving.patientName) : null,
-          detail: panel.serving.doctorName,
-        }
-      : null,
+    // One entry per room with a number on the board, in room order.
+    serving: panel.serving.map((t) => ({
+      ticket: formatTicket(t.category, t.number),
+      // A walk-in may have no name yet, and the number is the point regardless.
+      name: t.patientName ? shortenName(t.patientName) : null,
+      room: t.roomName,
+    })),
     waitingCount: panel.waiting.length,
     next: panel.waiting.slice(0, 4).map((ticket) => ({
       ticket: formatTicket(ticket.category, ticket.number),
@@ -60,8 +61,12 @@ export default async function MonitorPage({
               name: board.lastCalled.patientName
                 ? shortenName(board.lastCalled.patientName)
                 : null,
-              categoryLabel:
-                board.panels.find((p) => p.key === board.lastCalled!.category)?.label ?? '',
+              // The room is where they go. A number called before rooms existed has
+              // none, and falls back to the category.
+              destination:
+                board.lastCalled.roomName ??
+                board.panels.find((p) => p.key === board.lastCalled!.category)?.label ??
+                '',
             }
           : null
       }

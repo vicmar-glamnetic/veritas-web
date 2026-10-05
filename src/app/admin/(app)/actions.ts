@@ -4,13 +4,13 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
 
-import { requireStaff, destroySession } from '@/lib/auth';
+import { requireDesk, destroySession } from '@/lib/auth';
 import { changeBookingStatus, type StaffStatus } from '@/lib/admin/status';
 
 /**
  * Booking status changes from the admin screens.
  *
- * Note the `requireStaff()` at the top of each: a server action is its own endpoint and
+ * Note the `requireDesk()` at the top of each: a server action is its own endpoint and
  * can be invoked without the guarded layout ever rendering, so the page guard is not
  * enough on its own.
  */
@@ -29,7 +29,7 @@ const statusSchema = z.object({
 export type ActionResult = { ok: boolean; message?: string };
 
 export async function setBookingStatus(formData: FormData): Promise<void> {
-  const staff = await requireStaff();
+  const staff = await requireDesk();
 
   const parsed = statusSchema.safeParse({
     bookingId: formData.get('bookingId') ?? '',

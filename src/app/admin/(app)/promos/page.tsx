@@ -4,7 +4,7 @@ import { asc, desc } from 'drizzle-orm';
 
 import { db } from '@/db';
 import { promos } from '@/db/schema';
-import { requireStaff } from '@/lib/auth';
+import { requireDesk } from '@/lib/auth';
 import { addDays, manilaDateString } from '@/lib/time';
 
 import { deletePromo, savePromo } from '../crud-actions';
@@ -21,7 +21,7 @@ export default async function PromosAdminPage({
 }: {
   searchParams: Promise<{ done?: string; error?: string; edit?: string }>;
 }) {
-  await requireStaff();
+  await requireDesk();
   const { done, error, edit } = await searchParams;
   const list = await db.select().from(promos).orderBy(asc(promos.sortOrder), desc(promos.startsOn));
   const editing = edit ? list.find((p) => p.id === edit) : undefined;
