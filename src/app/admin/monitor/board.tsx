@@ -34,7 +34,6 @@ type Panel = {
    */
   serving: { ticket: string; name: string | null; room: string | null }[];
   waitingCount: number;
-  next: { ticket: string; name: string | null }[];
 };
 
 /** `destination` is the room, or the category for a number called before rooms existed. */
@@ -247,8 +246,12 @@ export function MonitorBoard({
                   </p>
                 </div>
 
-                {/* Fixed padding, not flex-1: this is what keeps the rule below at the
-                    same height in all three panels. */}
+                {/*
+                 * Only the numbers being served. The upcoming list was taken off at the
+                 * clinic's request: the wall says who is called now, and a waiting count,
+                 * and nothing about who is next — which also puts fewer names on a public
+                 * screen.
+                 */}
                 <div className="py-[clamp(1rem,3.2vw,2.75rem)]">
                   {panel.serving.length > 0 ? (
                     <ul className="space-y-[clamp(0.75rem,1.6vw,1.25rem)]">
@@ -291,38 +294,6 @@ export function MonitorBoard({
                   )}
                 </div>
 
-                {/*
-                 * The queue reads down, not across. A waiting room wants to know how many
-                 * are in front of it, and a single wrapped line of codes answered that
-                 * badly while leaving most of a 1080p panel empty.
-                 */}
-                <div className="border-t border-line pt-[clamp(0.625rem,1.2vw,1rem)]">
-                  <p className="flex items-center gap-2 text-[clamp(0.625rem,0.9vw,0.75rem)] font-semibold tracking-[0.14em] text-ink-500 uppercase">
-                    <span
-                      className={`inline-block h-1.5 w-1.5 rounded-full ${accent.bar}`}
-                      aria-hidden
-                    />
-                    Next
-                  </p>
-
-                  {panel.next.length > 0 ? (
-                    <ul className="mt-[clamp(0.5rem,0.9vw,0.75rem)] space-y-[clamp(0.25rem,0.6vw,0.5rem)]">
-                      {panel.next.map((item) => (
-                        <li
-                          key={item.ticket}
-                          className="flex items-baseline justify-between gap-3 text-[clamp(0.8125rem,1.15vw,1.0625rem)]"
-                        >
-                          <span className="font-mono text-ink-700 tabular-nums">{item.ticket}</span>
-                          {item.name && <span className="text-ink-500">{item.name}</span>}
-                        </li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p className="mt-[clamp(0.5rem,0.9vw,0.75rem)] text-[clamp(0.8125rem,1.15vw,1.0625rem)] text-ink-500">
-                      Nobody else expected today
-                    </p>
-                  )}
-                </div>
               </section>
             );
           })}
